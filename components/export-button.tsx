@@ -46,11 +46,11 @@ export function ExportButton({ transacciones, nombreMes }: Props) {
     <GlowButton
       variant="secondary"
       onClick={exportarCSV}
-      className="!py-1.5 !px-3 !text-xs"
+      className="!py-1.5 !px-2.5 sm:!px-3.5 !text-xs"
       title="Exportar a CSV / Excel"
     >
-      <Download className="h-3.5 w-3.5" />
-      Exportar CSV
+      <Download className="h-4 w-4 shrink-0" />
+      <span className="hidden sm:inline">Exportar CSV</span>
     </GlowButton>
   );
 }

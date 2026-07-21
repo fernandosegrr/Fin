@@ -49,22 +49,22 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
   const mesISO = primerDiaDelMes(anio, mes);
 
   return (
-    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-0 sm:px-4">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#070a12]/80 backdrop-blur-xl border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-500/30 font-extrabold text-lg">
+    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-3 sm:px-6 bg-[#070a12]">
+      {/* Top Navbar responsiva */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 py-2.5 bg-[#070a12]/90 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white font-black text-lg shadow-lg shadow-emerald-500/25 shrink-0">
             F
           </div>
           <div>
-            <h1 className="text-base font-bold text-slate-100 flex items-center gap-1.5">
-              Finanzas <ShinyText text="Pro" className="text-xs font-black tracking-widest uppercase" />
+            <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
+              Finanzas <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
             </h1>
-            <p className="text-[10px] text-slate-400">Control Inteligente</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Control Inteligente</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <ExportButton
             transacciones={balance.actual.transacciones}
             nombreMes={balance.actual.nombreMes}
@@ -77,13 +77,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
         </div>
       </header>
 
-      {/* Month Switcher Bar */}
-      <div className="px-4 pt-4">
+      {/* Selector de Mes */}
+      <div className="pt-2">
         <MonthSelector anio={anio} mes={mes} onCambiarMes={cambiarMes} />
       </div>
 
       {isPending && (
-        <div className="px-4 mt-2">
+        <div className="mt-2">
           <div className="h-1 w-full bg-emerald-500/20 overflow-hidden rounded-full">
             <div className="h-full bg-emerald-400 animate-pulse w-1/2" />
           </div>

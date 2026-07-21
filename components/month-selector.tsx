@@ -30,19 +30,19 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
   const nombreMesCapitalizado = capitalizarPrimeraLetra(nombreDelMes(anio, mes));
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-900/60 p-2 backdrop-blur-md shadow-lg">
+    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#111726]/90 p-1.5 backdrop-blur-xl shadow-xl">
       <button
         type="button"
         onClick={irAnterior}
         aria-label="Mes anterior"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95"
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95 shrink-0"
       >
-        <ChevronLeft className="h-5 w-5" />
+        <ChevronLeft className="h-4 w-4" />
       </button>
 
-      <div className="flex items-center gap-2 px-3 py-1">
-        <Calendar className="h-4 w-4 text-emerald-400" />
-        <span className="text-sm font-semibold tracking-wide text-slate-100">
+      <div className="flex items-center gap-2 px-2 py-1">
+        <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
+        <span className="text-xs sm:text-sm font-bold tracking-wide text-slate-100 truncate">
           {nombreMesCapitalizado}
         </span>
       </div>
@@ -51,9 +51,9 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
         type="button"
         onClick={irSiguiente}
         aria-label="Mes siguiente"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95"
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95 shrink-0"
       >
-        <ChevronRight className="h-5 w-5" />
+        <ChevronRight className="h-4 w-4" />
       </button>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { LogOut } from "lucide-react";
+import { useEffect, useState, useTransition, useCallback } from "react";
+import { LogOut, Wifi } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { BalanceResumen } from "@/components/balance-resumen";
 import { AnalyticsSummary } from "@/components/analytics-summary";
 import { FinancialCharts } from "@/components/financial-charts";
@@ -9,6 +10,7 @@ import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
 import { TransactionsSection } from "@/components/transactions-section";
 import { MonthSelector } from "@/components/month-selector";
 import { ExportButton } from "@/components/export-button";
+import { ToastNotification, type ToastMessage } from "@/components/toast-notification";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { ShinyText } from "@/components/react-bits/ShinyText";
 import { obtenerBalanceMensual, obtenerPresupuestosConGasto, signOut, type BalanceMensual } from "@/app/dashboard/actions";
@@ -27,6 +29,68 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
   const [anio, setAnio] = useState(initialBalance.actual.anio);
   const [mes, setMes] = useState(initialBalance.actual.mes);
   const [isPending, startTransition] = useTransition();
+
+  // Notificaciones Toast
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  // Recarga silenciosa en tiempo real (invocada por WebSockets o Server Actions)
+  const recargarDatos = useCallback((mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => {
+    if (mensajeToast) {
+      setToast({
+        id: String(Date.now()),
+        texto: mensajeToast.texto,
+        tipo: mensajeToast.tipo ?? "success",
+      });
+    }
+
+    startTransition(async () => {
+      try {
+        const [nuevoBalance, nuevosPresupuestos] = await Promise.all([
+          obtenerBalanceMensual(anio, mes),
+          obtenerPresupuestosConGasto(anio, mes),
+        ]);
+        setBalance(nuevoBalance);
+        setPresupuestos(nuevosPresupuestos);
+      } catch (err) {
+        console.error("Error recargando datos del dashboard:", err);
+      }
+    });
+  }, [anio, mes]);
+
+  // SUSCRIPCIÓN EN TIEMPO REAL VÍA SUPABASE WEBSOCKETS ⚡
+  useEffect(() => {
+    const supabase = createClient();
+
+    const canalTransacciones = supabase
+      .channel(`realtime_dashboard_${anio}_${mes}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "transacciones",
+        },
+        () => {
+          recargarDatos();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "presupuestos",
+        },
+        () => {
+          recargarDatos();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalTransacciones);
+    };
+  }, [anio, mes, recargarDatos]);
 
   function cambiarMes(nuevoAnio: number, nuevoMes: number) {
     setAnio(nuevoAnio);
@@ -49,8 +113,11 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
   const mesISO = primerDiaDelMes(anio, mes);
 
   return (
-    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-3 sm:px-6 bg-[#070a12]">
-      {/* Top Navbar responsiva con ajuste de Safe Area Inset para el reloj y notch del celular */}
+    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-3 sm:px-6 bg-[#070a12] relative">
+      {/* Toast Banner Flotante con animación */}
+      <ToastNotification toast={toast} onCerrar={() => setToast(null)} />
+
+      {/* Top Navbar responsiva */}
       <header
         className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 pb-3 bg-[#070a12]/95 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2"
         style={{
@@ -67,7 +134,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
             <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
               NexFin <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
             </h1>
-            <p className="text-[10px] text-slate-400 mt-0.5">Control Inteligente</p>
+            <p className="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1 font-medium">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              En Vivo (WebSocket)
+            </p>
           </div>
         </div>
 
@@ -117,6 +190,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
         key={`${anio}-${mes}`}
         initialTransacciones={balance.actual.transacciones}
         categorias={categorias}
+        onTransaccionCambiada={recargarDatos}
       />
     </main>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useOptimistic, useState, useMemo } from "react";
-import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight, CreditCard, Banknote } from "lucide-react";
+import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { crearTransaccion, actualizarTransaccion, eliminarTransaccion } from "@/app/dashboard/actions";
 import { formatearFechaCorta, hoyISOEnMexico } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
@@ -14,13 +14,14 @@ import { CategoryManagerModal } from "./category-manager-modal";
 interface Props {
   initialTransacciones: TransaccionConCategoria[];
   categorias: Categoria[];
+  onTransaccionCambiada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
 type TransaccionOptimista = TransaccionConCategoria & { pendiente?: boolean };
 
 let contadorOptimista = 0;
 
-export function TransactionsSection({ initialTransacciones, categorias }: Props) {
+export function TransactionsSection({ initialTransacciones, categorias, onTransaccionCambiada }: Props) {
   const [modalCapturaAbierto, setModalCapturaAbierto] = useState(false);
   const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
   const [transaccionAEditar, setTransaccionAEditar] = useState<TransaccionConCategoria | null>(null);
@@ -67,6 +68,8 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
     const categoria = categorias.find((c) => c.id === datos.categoria_id) ?? null;
     contadorOptimista += 1;
 
+    const esIngreso = datos.tipo === "ingreso";
+
     if (datos.id) {
       // Editar
       const actualizada: TransaccionOptimista = {
@@ -94,6 +97,10 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
             descripcion: datos.descripcion,
             metodo_pago: datos.metodo_pago,
             fecha: datos.fecha,
+          });
+          onTransaccionCambiada?.({
+            texto: `¡Movimiento de ${formatearMonto(datos.monto)} actualizado con éxito! ✏️`,
+            tipo: "success",
           });
         } catch (err) {
           setErrorEnvio(err instanceof Error ? err.message : "Error al actualizar.");
@@ -126,6 +133,12 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
             descripcion: datos.descripcion,
             metodo_pago: datos.metodo_pago,
           });
+          onTransaccionCambiada?.({
+            texto: esIngreso
+              ? `¡Ingreso de ${formatearMonto(datos.monto)} registrado! 💰`
+              : `¡Egreso de ${formatearMonto(datos.monto)} registrado! 🧾`,
+            tipo: "success",
+          });
         } catch (err) {
           setErrorEnvio(err instanceof Error ? err.message : "Error al guardar el movimiento.");
         }
@@ -142,6 +155,10 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
       setTransaccionesOptimista({ accion: "eliminar", item: itemEliminar });
       try {
         await eliminarTransaccion(id);
+        onTransaccionCambiada?.({
+          texto: "¡Movimiento eliminado con éxito! 🗑️",
+          tipo: "info",
+        });
       } catch (err) {
         setErrorEnvio(err instanceof Error ? err.message : "No se pudo eliminar el movimiento.");
       }

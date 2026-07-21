@@ -5,18 +5,19 @@ const PUBLIC_ROUTES = ["/login"];
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-/**
- * Refresca la sesión de Supabase en cada request y protege las rutas
- * privadas. Debe correr en middleware.ts porque los Server Components no
- * pueden escribir cookies por sí mismos.
- */
 export async function updateSession(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  // Si no están configuradas las variables en Vercel, continuar la petición sin hacer fallar el middleware
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -31,27 +32,29 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-    },
-  );
+    });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const isPublicRoute = PUBLIC_ROUTES.some((route) =>
-    request.nextUrl.pathname.startsWith(route),
-  );
+    const isPublicRoute = PUBLIC_ROUTES.some((route) =>
+      request.nextUrl.pathname.startsWith(route),
+    );
 
-  if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
+    if (!user && !isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
 
-  if (user && isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    if (user && isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+  } catch (err) {
+    console.error("Error en middleware de Supabase:", err);
   }
 
   return supabaseResponse;

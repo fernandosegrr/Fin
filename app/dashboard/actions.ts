@@ -33,7 +33,7 @@ export async function obtenerCategorias(): Promise<Categoria[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("categorias").select("*").order("nombre");
 
-  if (error) throw new Error(error.message);
+  if (error) return [];
   return data ?? [];
 }
 
@@ -59,16 +59,30 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const { error } = await supabase.from("transacciones").insert({
+  const payload: Record<string, any> = {
     user_id: user.id,
     categoria_id: input.categoria_id,
     monto: input.monto,
-    metodo_pago: input.metodo_pago || "tarjeta",
     fecha: input.fecha || hoyISOEnMexico(),
     descripcion: input.descripcion?.trim() || null,
-  });
+  };
 
-  if (error) throw new Error(error.message);
+  if (input.metodo_pago) {
+    payload.metodo_pago = input.metodo_pago;
+  }
+
+  const { error } = await supabase.from("transacciones").insert(payload);
+
+  if (error) {
+    // Fallback si la columna metodo_pago no existe todavía en Supabase
+    if (error.message.includes("metodo_pago")) {
+      delete payload.metodo_pago;
+      const { error: retryError } = await supabase.from("transacciones").insert(payload);
+      if (retryError) throw new Error(retryError.message);
+    } else {
+      throw new Error(error.message);
+    }
+  }
 
   revalidatePath("/dashboard");
 }
@@ -97,19 +111,31 @@ export async function actualizarTransaccion(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
+  const payload: Record<string, any> = {
+    categoria_id: input.categoria_id,
+    monto: input.monto,
+    descripcion: input.descripcion?.trim() || null,
+    ...(input.fecha ? { fecha: input.fecha } : {}),
+  };
+
+  if (input.metodo_pago) {
+    payload.metodo_pago = input.metodo_pago;
+  }
+
   const { error } = await supabase
     .from("transacciones")
-    .update({
-      categoria_id: input.categoria_id,
-      monto: input.monto,
-      metodo_pago: input.metodo_pago || "tarjeta",
-      descripcion: input.descripcion?.trim() || null,
-      ...(input.fecha ? { fecha: input.fecha } : {}),
-    })
+    .update(payload)
     .eq("id", id)
     .eq("user_id", user.id);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.includes("metodo_pago")) {
+      delete payload.metodo_pago;
+      await supabase.from("transacciones").update(payload).eq("id", id).eq("user_id", user.id);
+    } else {
+      throw new Error(error.message);
+    }
+  }
 
   revalidatePath("/dashboard");
 }
@@ -187,42 +213,73 @@ export async function obtenerBalanceMensual(
   const rangoActual = rangoDelMes(anio, mes);
   const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
-  // Consulta de transacciones históricas anteriores a este mes para calcular el Arrastre (Saldo Inicial)
-  const [resHistorico, resActual, resAnterior] = await Promise.all([
-    supabase
-      .from("transacciones")
-      .select("monto, metodo_pago, categoria:categorias(tipo)")
-      .lt("fecha", rangoActual.inicio),
-    supabase
-      .from("transacciones")
-      .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-      .gte("fecha", rangoActual.inicio)
-      .lt("fecha", rangoActual.finExclusivo)
-      .order("fecha", { ascending: false })
-      .order("creado_en", { ascending: false }),
-    supabase
-      .from("transacciones")
-      .select("monto, metodo_pago, categoria:categorias(tipo)")
-      .gte("fecha", rangoAnterior.inicio)
-      .lt("fecha", rangoAnterior.finExclusivo),
-  ]);
+  let resHistoricoData: any[] = [];
+  let resActualData: any[] = [];
+  let resAnteriorData: any[] = [];
 
-  if (resActual.error) throw new Error(resActual.error.message);
-  if (resAnterior.error) throw new Error(resAnterior.error.message);
+  try {
+    const [resHist, resAct, resAnt] = await Promise.all([
+      supabase
+        .from("transacciones")
+        .select("monto, metodo_pago, categoria:categorias(tipo)")
+        .lt("fecha", rangoActual.inicio),
+      supabase
+        .from("transacciones")
+        .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+        .gte("fecha", rangoActual.inicio)
+        .lt("fecha", rangoActual.finExclusivo)
+        .order("fecha", { ascending: false })
+        .order("creado_en", { ascending: false }),
+      supabase
+        .from("transacciones")
+        .select("monto, metodo_pago, categoria:categorias(tipo)")
+        .gte("fecha", rangoAnterior.inicio)
+        .lt("fecha", rangoAnterior.finExclusivo),
+    ]);
+
+    if (resAct.error && resAct.error.message.includes("metodo_pago")) {
+      // Reintento seguro sin la columna metodo_pago
+      const [resHist2, resAct2, resAnt2] = await Promise.all([
+        supabase
+          .from("transacciones")
+          .select("monto, categoria:categorias(tipo)")
+          .lt("fecha", rangoActual.inicio),
+        supabase
+          .from("transacciones")
+          .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+          .gte("fecha", rangoActual.inicio)
+          .lt("fecha", rangoActual.finExclusivo)
+          .order("fecha", { ascending: false })
+          .order("creado_en", { ascending: false }),
+        supabase
+          .from("transacciones")
+          .select("monto, categoria:categorias(tipo)")
+          .gte("fecha", rangoAnterior.inicio)
+          .lt("fecha", rangoAnterior.finExclusivo),
+      ]);
+      resHistoricoData = resHist2.data ?? [];
+      resActualData = resAct2.data ?? [];
+      resAnteriorData = resAnt2.data ?? [];
+    } else {
+      resHistoricoData = resHist.data ?? [];
+      resActualData = resAct.data ?? [];
+      resAnteriorData = resAnt.data ?? [];
+    }
+  } catch (err) {
+    console.error("Error obteniendo balance mensual:", err);
+  }
 
   // Arrastre histórico previo
   let saldoInicialHistorico = 0;
-  if (!resHistorico.error && resHistorico.data) {
-    for (const item of resHistorico.data as unknown as { monto: number; categoria: { tipo: TipoCategoria } | null }[]) {
-      if (item.categoria?.tipo === "ingreso") saldoInicialHistorico += item.monto;
-      else if (item.categoria?.tipo === "egreso") saldoInicialHistorico -= item.monto;
-    }
+  for (const item of resHistoricoData as { monto: number; categoria: { tipo: TipoCategoria } | null }[]) {
+    if (item.categoria?.tipo === "ingreso") saldoInicialHistorico += item.monto;
+    else if (item.categoria?.tipo === "egreso") saldoInicialHistorico -= item.monto;
   }
 
-  const transaccionesActual = (resActual.data ?? []) as unknown as TransaccionConCategoria[];
+  const transaccionesActual = resActualData as unknown as TransaccionConCategoria[];
   const totalesActual = calcularTotalesDetallados(transaccionesActual);
   const totalesAnterior = calcularTotalesDetallados(
-    (resAnterior.data ?? []) as unknown as {
+    resAnteriorData as unknown as {
       monto: number;
       metodo_pago?: MetodoPago;
       categoria: { tipo: TipoCategoria } | null;
@@ -271,38 +328,39 @@ export async function obtenerPresupuestosConGasto(
   const mesActualISO = primerDiaDelMes(anio, mes);
   const rango = rangoDelMes(anio, mes);
 
-  const [resCategorias, resPresupuestos, resTransacciones] = await Promise.all([
-    supabase.from("categorias").select("*").eq("tipo", "egreso").order("nombre"),
-    supabase.from("presupuestos").select("*").eq("mes", mesActualISO),
-    supabase
-      .from("transacciones")
-      .select("categoria_id, monto")
-      .gte("fecha", rango.inicio)
-      .lt("fecha", rango.finExclusivo),
-  ]);
+  try {
+    const [resCategorias, resPresupuestos, resTransacciones] = await Promise.all([
+      supabase.from("categorias").select("*").eq("tipo", "egreso").order("nombre"),
+      supabase.from("presupuestos").select("*").eq("mes", mesActualISO),
+      supabase
+        .from("transacciones")
+        .select("categoria_id, monto")
+        .gte("fecha", rango.inicio)
+        .lt("fecha", rango.finExclusivo),
+    ]);
 
-  if (resCategorias.error) throw new Error(resCategorias.error.message);
-  if (resPresupuestos.error) throw new Error(resPresupuestos.error.message);
-  if (resTransacciones.error) throw new Error(resTransacciones.error.message);
+    const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
+    const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
+    const transacciones = (resTransacciones.data ?? []) as Pick<
+      Transaccion,
+      "categoria_id" | "monto"
+    >[];
 
-  const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
-  const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
-  const transacciones = (resTransacciones.data ?? []) as Pick<
-    Transaccion,
-    "categoria_id" | "monto"
-  >[];
+    const gastoPorCategoria = new Map<string, number>();
+    for (const t of transacciones) {
+      gastoPorCategoria.set(t.categoria_id, (gastoPorCategoria.get(t.categoria_id) ?? 0) + t.monto);
+    }
+    const presupuestoPorCategoria = new Map(presupuestos.map((p) => [p.categoria_id, p]));
 
-  const gastoPorCategoria = new Map<string, number>();
-  for (const t of transacciones) {
-    gastoPorCategoria.set(t.categoria_id, (gastoPorCategoria.get(t.categoria_id) ?? 0) + t.monto);
+    return categoriasEgreso.map((categoria) => ({
+      categoria,
+      presupuesto: presupuestoPorCategoria.get(categoria.id) ?? null,
+      gastado: gastoPorCategoria.get(categoria.id) ?? 0,
+    }));
+  } catch (err) {
+    console.error("Error obteniendo presupuestos con gasto:", err);
+    return [];
   }
-  const presupuestoPorCategoria = new Map(presupuestos.map((p) => [p.categoria_id, p]));
-
-  return categoriasEgreso.map((categoria) => ({
-    categoria,
-    presupuesto: presupuestoPorCategoria.get(categoria.id) ?? null,
-    gastado: gastoPorCategoria.get(categoria.id) ?? 0,
-  }));
 }
 
 export async function guardarPresupuesto(

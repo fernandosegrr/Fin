@@ -1,7 +1,4 @@
--- Schema de Finanzas — correr una sola vez en Supabase Dashboard → SQL Editor.
--- Reconstruye exactamente lo descrito en la especificación original:
--- categorias / transacciones / presupuestos, RLS con auth.uid() = user_id,
--- y el trigger que rechaza presupuestos sobre categorías tipo 'ingreso'.
+-- Schema de Finanzas — correr en Supabase Dashboard → SQL Editor.
 
 create type tipo_categoria as enum ('ingreso', 'egreso');
 create type grupo_categoria as enum ('fijo', 'variable');
@@ -34,10 +31,14 @@ create table public.transacciones (
   user_id      uuid not null references auth.users (id),
   categoria_id uuid not null references public.categorias (id),
   monto        numeric not null check (monto > 0),
-  fecha        date not null, -- sin default: siempre la calcula la app en America/Mexico_City
+  fecha        date not null,
+  metodo_pago  text default 'tarjeta',
   descripcion  text,
   creado_en    timestamptz not null default now()
 );
+
+-- Si la tabla ya existe, agregar la columna metodo_pago:
+alter table public.transacciones add column if not exists metodo_pago text default 'tarjeta';
 
 create index transacciones_user_fecha_idx on public.transacciones (user_id, fecha desc);
 
@@ -54,7 +55,7 @@ create table public.presupuestos (
   user_id       uuid not null references auth.users (id),
   categoria_id  uuid not null references public.categorias (id),
   monto_limite  numeric not null,
-  mes           date not null -- convención: primer día del mes ('YYYY-MM-01')
+  mes           date not null
 );
 
 create index presupuestos_user_mes_idx on public.presupuestos (user_id, mes);

@@ -177,7 +177,7 @@ export function TransactionsSection({ initialTransacciones, categorias, onTransa
 
   return (
     <>
-      <section className="mt-8 px-0 sm:px-4 pb-24">
+      <section className="mt-4 px-0 sm:px-4 pb-20">
         <SpotlightCard className="bg-slate-900/60 border-white/10 p-4 sm:p-5 rounded-3xl">
           {/* Controls Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -368,14 +368,14 @@ export function TransactionsSection({ initialTransacciones, categorias, onTransa
         </SpotlightCard>
       </section>
 
-      {/* Floating Action Button (FAB) con Glow */}
+      {/* Floating Action Button (FAB) con Glow ubicado arriba del Bottom Nav Bar */}
       <button
         type="button"
         onClick={abrirNuevo}
         aria-label="Agregar movimiento"
         className="fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-2xl leading-none text-white shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all border border-emerald-300/40"
         style={{
-          bottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
+          bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
           right: "max(1.25rem, calc((100vw - 640px) / 2 + 1.25rem))",
         }}
       >

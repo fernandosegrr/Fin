@@ -12,6 +12,7 @@ import { RecurringExpenses } from "@/components/recurring-expenses";
 import { MonthSelector } from "@/components/month-selector";
 import { ExportButton } from "@/components/export-button";
 import { ToastNotification, type ToastMessage } from "@/components/toast-notification";
+import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { ShinyText } from "@/components/react-bits/ShinyText";
 import { obtenerBalanceMensual, obtenerPresupuestosConGasto, crearTransaccion, signOut, type BalanceMensual } from "@/app/dashboard/actions";
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function DashboardContainer({ initialBalance, initialPresupuestos, categorias }: Props) {
+  const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [balance, setBalance] = useState<BalanceMensual>(initialBalance);
   const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>(initialPresupuestos);
   const [anio, setAnio] = useState(initialBalance.actual.anio);
@@ -142,7 +144,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
   const mesISO = primerDiaDelMes(anio, mes);
 
   return (
-    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-3 sm:px-6 bg-[#070a12] relative">
+    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-24 px-3 sm:px-6 bg-[#070a12] relative">
       {/* Toast Banner Flotante con animación */}
       <ToastNotification toast={toast} onCerrar={() => setToast(null)} />
 
@@ -199,38 +201,56 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
         </div>
       )}
 
-      {/* 1. Resumen de Balance Neto & Cuentas */}
-      <BalanceResumen actual={balance.actual} anterior={balance.anterior} />
+      {/* CONTENIDO DE PESTAÑAS */}
+      <div className="mt-1">
+        {/* Pestaña 1: INICIO (Saldo Total + Movimientos del Mes) */}
+        {tabActiva === "inicio" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <BalanceResumen actual={balance.actual} anterior={balance.anterior} />
+            <TransactionsSection
+              key={`${anio}-${mes}`}
+              initialTransacciones={balance.actual.transacciones}
+              categorias={categorias}
+              onTransaccionCambiada={recargarDatos}
+            />
+          </div>
+        )}
 
-      {/* 2. Movimientos del Mes (REORDENADO ARRIBA COMO SE SOLICITÓ) */}
-      <TransactionsSection
-        key={`${anio}-${mes}`}
-        initialTransacciones={balance.actual.transacciones}
-        categorias={categorias}
-        onTransaccionCambiada={recargarDatos}
-      />
+        {/* Pestaña 2: SUSCRIPCIONES (Gastos Recurrentes + Cobro en 1 clic) */}
+        {tabActiva === "suscripciones" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <RecurringExpenses
+              categorias={categorias}
+              onRegistrarTransaccion={registrarGastoRecurrente}
+            />
+          </div>
+        )}
 
-      {/* 3. Suscripciones & Gastos Recurrentes (NUEVO MÓDULO) */}
-      <RecurringExpenses
-        categorias={categorias}
-        onRegistrarTransaccion={registrarGastoRecurrente}
-      />
+        {/* Pestaña 3: ESTADÍSTICAS (Métricas + Gráficas de Dona y Flujo) */}
+        {tabActiva === "estadisticas" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <AnalyticsSummary
+              transacciones={balance.actual.transacciones}
+              totalEgresos={balance.actual.egresos}
+            />
+            <FinancialCharts
+              transacciones={balance.actual.transacciones}
+              ingresosTotales={balance.actual.ingresos}
+              egresosTotales={balance.actual.egresos}
+            />
+          </div>
+        )}
 
-      {/* 4. Métricas e Insights Financieros */}
-      <AnalyticsSummary
-        transacciones={balance.actual.transacciones}
-        totalEgresos={balance.actual.egresos}
-      />
+        {/* Pestaña 4: PRESUPUESTOS (Barras de Salud Financiera y Límites) */}
+        {tabActiva === "presupuestos" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
+          </div>
+        )}
+      </div>
 
-      {/* 5. Gráficas Interactivas */}
-      <FinancialCharts
-        transacciones={balance.actual.transacciones}
-        ingresosTotales={balance.actual.ingresos}
-        egresosTotales={balance.actual.egresos}
-      />
-
-      {/* 6. Barras de Progreso de Presupuestos */}
-      <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
+      {/* Navegación por Pestañas Inferior (Bottom Nav Bar) */}
+      <BottomNavigationBar tabActiva={tabActiva} onCambiarTab={setTabActiva} />
     </main>
   );
 }

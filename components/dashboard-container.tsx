@@ -50,8 +50,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
 
   return (
     <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-28 px-3 sm:px-6 bg-[#070a12]">
-      {/* Top Navbar responsiva */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 py-2.5 bg-[#070a12]/90 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2">
+      {/* Top Navbar responsiva con ajuste de Safe Area Inset para el reloj y notch del celular */}
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 pb-3 bg-[#070a12]/95 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2"
+        style={{
+          paddingTop: "max(0.75rem, calc(0.5rem + env(safe-area-inset-top, 0px)))",
+        }}
+      >
         <div className="flex items-center gap-2.5">
           <img
             src="/logo.png"

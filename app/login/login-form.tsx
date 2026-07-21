@@ -17,12 +17,14 @@ export function LoginForm() {
       <SpotlightCard className="w-full max-w-md bg-slate-900/80 border-white/10 p-8 rounded-3xl backdrop-blur-2xl shadow-2xl relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white font-extrabold text-2xl shadow-lg shadow-emerald-500/30">
-              F
-            </div>
+            <img
+              src="/logo.png"
+              alt="NexFin Logo"
+              className="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/30 border border-white/10"
+            />
             <div>
               <h1 className="text-xl font-bold text-slate-100 flex items-center gap-1.5">
-                Finanzas <ShinyText text="Pro" className="text-xs font-black tracking-widest uppercase" />
+                NexFin <ShinyText text="Pro" className="text-xs font-black tracking-widest uppercase" />
               </h1>
               <p className="text-xs text-slate-400">
                 {modo === "login" ? "Accede a tu plataforma" : "Comienza a gestionar tu patrimonio"}

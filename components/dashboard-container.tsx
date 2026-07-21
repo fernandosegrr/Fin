@@ -53,12 +53,14 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
       {/* Top Navbar responsiva */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 py-2.5 bg-[#070a12]/90 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white font-black text-lg shadow-lg shadow-emerald-500/25 shrink-0">
-            F
-          </div>
+          <img
+            src="/logo.png"
+            alt="NexFin Logo"
+            className="h-9 w-9 rounded-xl object-cover shadow-lg shadow-emerald-500/25 border border-white/10 shrink-0"
+          />
           <div>
             <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
-              Finanzas <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
+              NexFin <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
             </h1>
             <p className="text-[10px] text-slate-400 mt-0.5">Control Inteligente</p>
           </div>

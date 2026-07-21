@@ -34,6 +34,17 @@ export interface Presupuesto {
   mes: string; // 'YYYY-MM-01'
 }
 
+export interface GastoRecurrente {
+  id: string;
+  user_id?: string;
+  nombre: string;
+  monto: number;
+  dia_cobro: number; // 1-31
+  categoria_id: string;
+  metodo_pago: MetodoPago;
+  categoria?: Pick<Categoria, "id" | "nombre" | "tipo" | "grupo"> | null;
+}
+
 /** Resumen de ingresos/egresos/balance de un mes calendario. */
 export interface ResumenMes {
   anio: number;

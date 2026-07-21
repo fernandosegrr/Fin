@@ -8,14 +8,15 @@ import { AnalyticsSummary } from "@/components/analytics-summary";
 import { FinancialCharts } from "@/components/financial-charts";
 import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
 import { TransactionsSection } from "@/components/transactions-section";
+import { RecurringExpenses } from "@/components/recurring-expenses";
 import { MonthSelector } from "@/components/month-selector";
 import { ExportButton } from "@/components/export-button";
 import { ToastNotification, type ToastMessage } from "@/components/toast-notification";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { ShinyText } from "@/components/react-bits/ShinyText";
-import { obtenerBalanceMensual, obtenerPresupuestosConGasto, signOut, type BalanceMensual } from "@/app/dashboard/actions";
+import { obtenerBalanceMensual, obtenerPresupuestosConGasto, crearTransaccion, signOut, type BalanceMensual } from "@/app/dashboard/actions";
 import { primerDiaDelMes } from "@/lib/dates";
-import type { Categoria, PresupuestoConGasto } from "@/lib/types";
+import type { Categoria, MetodoPago, PresupuestoConGasto } from "@/lib/types";
 
 interface Props {
   initialBalance: BalanceMensual;
@@ -110,6 +111,34 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
     });
   }
 
+  function registrarGastoRecurrente(datos: {
+    categoria_id: string;
+    monto: number;
+    descripcion: string;
+    metodo_pago: MetodoPago;
+  }) {
+    startTransition(async () => {
+      try {
+        await crearTransaccion({
+          categoria_id: datos.categoria_id,
+          monto: datos.monto,
+          descripcion: datos.descripcion,
+          metodo_pago: datos.metodo_pago,
+        });
+        recargarDatos({
+          texto: `¡Cobro de ${datos.descripcion} registrado con éxito! ⚡`,
+          tipo: "success",
+        });
+      } catch (err) {
+        setToast({
+          id: String(Date.now()),
+          texto: err instanceof Error ? err.message : "Error registrando cobro.",
+          tipo: "error",
+        });
+      }
+    });
+  }
+
   const mesISO = primerDiaDelMes(anio, mes);
 
   return (
@@ -170,28 +199,38 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
         </div>
       )}
 
-      {/* Dashboard Sections */}
+      {/* 1. Resumen de Balance Neto & Cuentas */}
       <BalanceResumen actual={balance.actual} anterior={balance.anterior} />
 
-      <AnalyticsSummary
-        transacciones={balance.actual.transacciones}
-        totalEgresos={balance.actual.egresos}
-      />
-
-      <FinancialCharts
-        transacciones={balance.actual.transacciones}
-        ingresosTotales={balance.actual.ingresos}
-        egresosTotales={balance.actual.egresos}
-      />
-
-      <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
-
+      {/* 2. Movimientos del Mes (REORDENADO ARRIBA COMO SE SOLICITÓ) */}
       <TransactionsSection
         key={`${anio}-${mes}`}
         initialTransacciones={balance.actual.transacciones}
         categorias={categorias}
         onTransaccionCambiada={recargarDatos}
       />
+
+      {/* 3. Suscripciones & Gastos Recurrentes (NUEVO MÓDULO) */}
+      <RecurringExpenses
+        categorias={categorias}
+        onRegistrarTransaccion={registrarGastoRecurrente}
+      />
+
+      {/* 4. Métricas e Insights Financieros */}
+      <AnalyticsSummary
+        transacciones={balance.actual.transacciones}
+        totalEgresos={balance.actual.egresos}
+      />
+
+      {/* 5. Gráficas Interactivas */}
+      <FinancialCharts
+        transacciones={balance.actual.transacciones}
+        ingresosTotales={balance.actual.ingresos}
+        egresosTotales={balance.actual.egresos}
+      />
+
+      {/* 6. Barras de Progreso de Presupuestos */}
+      <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
     </main>
   );
 }

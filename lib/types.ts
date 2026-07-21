@@ -1,5 +1,6 @@
 export type TipoCategoria = "ingreso" | "egreso";
 export type GrupoCategoria = "fijo" | "variable";
+export type MetodoPago = "efectivo" | "tarjeta";
 
 export interface Categoria {
   id: string;
@@ -16,6 +17,7 @@ export interface Transaccion {
   monto: number;
   fecha: string; // 'YYYY-MM-DD'
   descripcion: string | null;
+  metodo_pago?: MetodoPago;
   creado_en: string;
 }
 
@@ -38,10 +40,13 @@ export interface ResumenMes {
   mes: number; // 1-12
   ingresos: number;
   egresos: number;
-  balance: number;
+  balance: number; // Balance exclusivo del mes (Ingresos - Egresos)
+  saldoInicial: number; // Arrastre acumulado de todos los meses anteriores
+  saldoTotalDisponible: number; // saldoInicial + balance
+  totalesEfectivo: { ingresos: number; egresos: number; neto: number };
+  totalesTarjeta: { ingresos: number; egresos: number; neto: number };
 }
 
-/** Presupuesto de una categoría de egreso, con su gasto acumulado del mes. */
 export interface PresupuestoConGasto {
   categoria: Categoria;
   presupuesto: Presupuesto | null;
@@ -52,5 +57,6 @@ export interface FiltrosTransaccion {
   busqueda: string;
   tipo: "todos" | TipoCategoria;
   grupo: "todos" | GrupoCategoria;
+  metodoPago: "todos" | MetodoPago;
   categoriaId: string;
 }

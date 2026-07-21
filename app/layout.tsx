@@ -3,26 +3,40 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Finanzas",
-  description: "Finanzas personales",
+  title: "NexFin Pro - Control Financiero Inteligente",
+  description: "Plataforma inteligente de finanzas personales y gestión de ingresos/egresos",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "NexFin Pro",
+  },
 };
 
-// viewportFit: "cover" habilita env(safe-area-inset-*) en dispositivos con
-// notch/home-indicator — lo usa el botón flotante de captura rápida.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
+  themeColor: "#070a12",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es">
-      {/* bg-slate-100 detrás de la columna: en pantallas anchas se nota que
-          el layout mobile-first (max-w-app) sigue centrado a propósito,
-          en vez de verse como contenido roto pegado a la izquierda. */}
-      <body className="bg-slate-100 text-slate-900 antialiased">
-        <div className="mx-auto min-h-dvh w-full max-w-app bg-white shadow-sm">{children}</div>
+    <html lang="es" className="dark">
+      <head>
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
+      <body className="bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white">
+        <div className="mx-auto min-h-dvh w-full max-w-app sm:max-w-desktop bg-[#070a12]">{children}</div>
       </body>
     </html>
   );

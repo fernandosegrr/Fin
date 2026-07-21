@@ -14,6 +14,7 @@ import {
 import type {
   Categoria,
   GrupoCategoria,
+  MetodoPago,
   Presupuesto,
   PresupuestoConGasto,
   ResumenMes,
@@ -40,6 +41,7 @@ export interface NuevaTransaccion {
   categoria_id: string;
   monto: number;
   descripcion: string | null;
+  metodo_pago?: MetodoPago;
   fecha?: string;
 }
 
@@ -61,6 +63,7 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
     user_id: user.id,
     categoria_id: input.categoria_id,
     monto: input.monto,
+    metodo_pago: input.metodo_pago || "tarjeta",
     fecha: input.fecha || hoyISOEnMexico(),
     descripcion: input.descripcion?.trim() || null,
   });
@@ -74,6 +77,7 @@ export interface ActualizarTransaccionInput {
   categoria_id: string;
   monto: number;
   descripcion: string | null;
+  metodo_pago?: MetodoPago;
   fecha?: string;
 }
 
@@ -98,6 +102,7 @@ export async function actualizarTransaccion(
     .update({
       categoria_id: input.categoria_id,
       monto: input.monto,
+      metodo_pago: input.metodo_pago || "tarjeta",
       descripcion: input.descripcion?.trim() || null,
       ...(input.fecha ? { fecha: input.fecha } : {}),
     })
@@ -129,18 +134,39 @@ export async function eliminarTransaccion(id: string): Promise<void> {
   revalidatePath("/dashboard");
 }
 
-type TotalesPorTipo = { ingresos: number; egresos: number };
+type TotalesCalculados = {
+  ingresos: number;
+  egresos: number;
+  efectivo: { ingresos: number; egresos: number; neto: number };
+  tarjeta: { ingresos: number; egresos: number; neto: number };
+};
 
-function calcularTotales(
-  filas: { monto: number; categoria: { tipo: TipoCategoria } | null }[],
-): TotalesPorTipo {
+function calcularTotalesDetallados(
+  filas: { monto: number; metodo_pago?: MetodoPago; categoria: { tipo: TipoCategoria } | null }[],
+): TotalesCalculados {
   let ingresos = 0;
   let egresos = 0;
+
+  const efectivo = { ingresos: 0, egresos: 0, neto: 0 };
+  const tarjeta = { ingresos: 0, egresos: 0, neto: 0 };
+
   for (const fila of filas) {
-    if (fila.categoria?.tipo === "ingreso") ingresos += fila.monto;
-    else if (fila.categoria?.tipo === "egreso") egresos += fila.monto;
+    const esEfectivo = fila.metodo_pago === "efectivo";
+    if (fila.categoria?.tipo === "ingreso") {
+      ingresos += fila.monto;
+      if (esEfectivo) efectivo.ingresos += fila.monto;
+      else tarjeta.ingresos += fila.monto;
+    } else if (fila.categoria?.tipo === "egreso") {
+      egresos += fila.monto;
+      if (esEfectivo) efectivo.egresos += fila.monto;
+      else tarjeta.egresos += fila.monto;
+    }
   }
-  return { ingresos, egresos };
+
+  efectivo.neto = efectivo.ingresos - efectivo.egresos;
+  tarjeta.neto = tarjeta.ingresos - tarjeta.egresos;
+
+  return { ingresos, egresos, efectivo, tarjeta };
 }
 
 export interface BalanceMensual {
@@ -161,7 +187,12 @@ export async function obtenerBalanceMensual(
   const rangoActual = rangoDelMes(anio, mes);
   const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
-  const [resActual, resAnterior] = await Promise.all([
+  // Consulta de transacciones históricas anteriores a este mes para calcular el Arrastre (Saldo Inicial)
+  const [resHistorico, resActual, resAnterior] = await Promise.all([
+    supabase
+      .from("transacciones")
+      .select("monto, metodo_pago, categoria:categorias(tipo)")
+      .lt("fecha", rangoActual.inicio),
     supabase
       .from("transacciones")
       .select("*, categoria:categorias(id, nombre, tipo, grupo)")
@@ -171,7 +202,7 @@ export async function obtenerBalanceMensual(
       .order("creado_en", { ascending: false }),
     supabase
       .from("transacciones")
-      .select("monto, categoria:categorias(tipo)")
+      .select("monto, metodo_pago, categoria:categorias(tipo)")
       .gte("fecha", rangoAnterior.inicio)
       .lt("fecha", rangoAnterior.finExclusivo),
   ]);
@@ -179,14 +210,26 @@ export async function obtenerBalanceMensual(
   if (resActual.error) throw new Error(resActual.error.message);
   if (resAnterior.error) throw new Error(resAnterior.error.message);
 
+  // Arrastre histórico previo
+  let saldoInicialHistorico = 0;
+  if (!resHistorico.error && resHistorico.data) {
+    for (const item of resHistorico.data as unknown as { monto: number; categoria: { tipo: TipoCategoria } | null }[]) {
+      if (item.categoria?.tipo === "ingreso") saldoInicialHistorico += item.monto;
+      else if (item.categoria?.tipo === "egreso") saldoInicialHistorico -= item.monto;
+    }
+  }
+
   const transaccionesActual = (resActual.data ?? []) as unknown as TransaccionConCategoria[];
-  const totalesActual = calcularTotales(transaccionesActual);
-  const totalesAnterior = calcularTotales(
+  const totalesActual = calcularTotalesDetallados(transaccionesActual);
+  const totalesAnterior = calcularTotalesDetallados(
     (resAnterior.data ?? []) as unknown as {
       monto: number;
+      metodo_pago?: MetodoPago;
       categoria: { tipo: TipoCategoria } | null;
     }[],
   );
+
+  const balanceNetoActual = totalesActual.ingresos - totalesActual.egresos;
 
   return {
     actual: {
@@ -195,7 +238,11 @@ export async function obtenerBalanceMensual(
       nombreMes: nombreDelMes(anio, mes),
       ingresos: totalesActual.ingresos,
       egresos: totalesActual.egresos,
-      balance: totalesActual.ingresos - totalesActual.egresos,
+      balance: balanceNetoActual,
+      saldoInicial: saldoInicialHistorico,
+      saldoTotalDisponible: saldoInicialHistorico + balanceNetoActual,
+      totalesEfectivo: totalesActual.efectivo,
+      totalesTarjeta: totalesActual.tarjeta,
       transacciones: transaccionesActual,
     },
     anterior: {
@@ -205,6 +252,10 @@ export async function obtenerBalanceMensual(
       ingresos: totalesAnterior.ingresos,
       egresos: totalesAnterior.egresos,
       balance: totalesAnterior.ingresos - totalesAnterior.egresos,
+      saldoInicial: 0,
+      saldoTotalDisponible: totalesAnterior.ingresos - totalesAnterior.egresos,
+      totalesEfectivo: totalesAnterior.efectivo,
+      totalesTarjeta: totalesAnterior.tarjeta,
     },
   };
 }
@@ -266,7 +317,6 @@ export async function guardarPresupuesto(
   if (!user) throw new Error("No autenticado.");
 
   if (monto_limite <= 0) {
-    // Si el monto es 0 o negativo, eliminar el presupuesto si existe
     await supabase
       .from("presupuestos")
       .delete()
@@ -274,7 +324,6 @@ export async function guardarPresupuesto(
       .eq("categoria_id", categoria_id)
       .eq("mes", mesISO);
   } else {
-    // Buscar si ya existe
     const { data: existente } = await supabase
       .from("presupuestos")
       .select("id")

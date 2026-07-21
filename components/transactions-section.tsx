@@ -1,13 +1,13 @@
 "use client";
 
 import { startTransition, useOptimistic, useState, useMemo } from "react";
-import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight, CreditCard, Banknote } from "lucide-react";
 import { crearTransaccion, actualizarTransaccion, eliminarTransaccion } from "@/app/dashboard/actions";
 import { formatearFechaCorta, hoyISOEnMexico } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
-import type { Categoria, TransaccionConCategoria } from "@/lib/types";
+import type { Categoria, MetodoPago, TransaccionConCategoria } from "@/lib/types";
 import { TransactionCaptureModal, type DatosNuevaTransaccion } from "./transaction-capture-modal";
 import { CategoryManagerModal } from "./category-manager-modal";
 
@@ -28,7 +28,7 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
   // Filtros
   const [busqueda, setBusqueda] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "ingreso" | "egreso">("todos");
-  const [filtroGrupo, setFiltroGrupo] = useState<"todos" | "fijo" | "variable">("todos");
+  const [filtroMetodo, setFiltroMetodo] = useState<"todos" | MetodoPago>("todos");
 
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
 
@@ -57,11 +57,11 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
         (t.categoria?.nombre || "").toLowerCase().includes(busqueda.toLowerCase());
 
       const cumpleTipo = filtroTipo === "todos" || t.categoria?.tipo === filtroTipo;
-      const cumpleGrupo = filtroGrupo === "todos" || t.categoria?.grupo === filtroGrupo;
+      const cumpleMetodo = filtroMetodo === "todos" || (t.metodo_pago || "tarjeta") === filtroMetodo;
 
-      return cumpleBusqueda && cumpleTipo && cumpleGrupo;
+      return cumpleBusqueda && cumpleTipo && cumpleMetodo;
     });
-  }, [transacciones, busqueda, filtroTipo, filtroGrupo]);
+  }, [transacciones, busqueda, filtroTipo, filtroMetodo]);
 
   function manejarEnvio(datos: DatosNuevaTransaccion) {
     const categoria = categorias.find((c) => c.id === datos.categoria_id) ?? null;
@@ -74,6 +74,7 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
         user_id: "",
         categoria_id: datos.categoria_id,
         monto: datos.monto,
+        metodo_pago: datos.metodo_pago,
         fecha: datos.fecha || hoyISOEnMexico(),
         descripcion: datos.descripcion,
         creado_en: "",
@@ -91,6 +92,7 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
             categoria_id: datos.categoria_id,
             monto: datos.monto,
             descripcion: datos.descripcion,
+            metodo_pago: datos.metodo_pago,
             fecha: datos.fecha,
           });
         } catch (err) {
@@ -104,6 +106,7 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
         user_id: "",
         categoria_id: datos.categoria_id,
         monto: datos.monto,
+        metodo_pago: datos.metodo_pago,
         fecha: hoyISOEnMexico(),
         descripcion: datos.descripcion,
         creado_en: "",
@@ -121,6 +124,7 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
             categoria_id: datos.categoria_id,
             monto: datos.monto,
             descripcion: datos.descripcion,
+            metodo_pago: datos.metodo_pago,
           });
         } catch (err) {
           setErrorEnvio(err instanceof Error ? err.message : "Error al guardar el movimiento.");
@@ -156,8 +160,8 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
 
   return (
     <>
-      <section className="mt-8 px-4 pb-24">
-        <SpotlightCard className="bg-slate-900/60 border-white/10 p-5 rounded-3xl">
+      <section className="mt-8 px-0 sm:px-4 pb-24">
+        <SpotlightCard className="bg-slate-900/60 border-white/10 p-4 sm:p-5 rounded-3xl">
           {/* Controls Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
@@ -232,37 +236,36 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
                 </button>
               </div>
 
-              {filtroTipo === "egreso" && (
-                <div className="flex rounded-xl bg-slate-950 p-1 border border-white/5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setFiltroGrupo("todos")}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${
-                      filtroGrupo === "todos" ? "bg-slate-800 text-white font-semibold" : "text-slate-400"
-                    }`}
-                  >
-                    Fijo y Variable
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFiltroGrupo("fijo")}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${
-                      filtroGrupo === "fijo" ? "bg-indigo-600 text-white font-semibold" : "text-slate-400"
-                    }`}
-                  >
-                    Solo Fijo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFiltroGrupo("variable")}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${
-                      filtroGrupo === "variable" ? "bg-amber-600 text-white font-semibold" : "text-slate-400"
-                    }`}
-                  >
-                    Solo Variable
-                  </button>
-                </div>
-              )}
+              {/* Filtro por Método de Pago */}
+              <div className="flex rounded-xl bg-slate-950 p-1 border border-white/5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setFiltroMetodo("todos")}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${
+                    filtroMetodo === "todos" ? "bg-slate-800 text-white font-semibold" : "text-slate-400"
+                  }`}
+                >
+                  Todas Cuentas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroMetodo("tarjeta")}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${
+                    filtroMetodo === "tarjeta" ? "bg-cyan-600 text-white font-semibold" : "text-slate-400"
+                  }`}
+                >
+                  💳 Tarjeta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroMetodo("efectivo")}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${
+                    filtroMetodo === "efectivo" ? "bg-amber-600 text-white font-semibold" : "text-slate-400"
+                  }`}
+                >
+                  💵 Efectivo
+                </button>
+              </div>
             </div>
           </div>
 
@@ -283,50 +286,56 @@ export function TransactionsSection({ initialTransacciones, categorias }: Props)
             <div className="space-y-2">
               {transaccionesFiltradas.map((t) => {
                 const esIngreso = t.categoria?.tipo === "ingreso";
+                const esEfectivo = t.metodo_pago === "efectivo";
+
                 return (
                   <div
                     key={t.id}
                     onClick={() => abrirEdicion(t)}
-                    className={`group flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 hover:border-white/20 hover:bg-slate-800/40 transition-all cursor-pointer ${
+                    className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 hover:border-white/20 hover:bg-slate-800/40 transition-all cursor-pointer ${
                       t.pendiente ? "opacity-50" : ""
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                       <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                        className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-2xl border ${
                           esIngreso
                             ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                             : "bg-rose-500/10 border-rose-500/20 text-rose-400"
                         }`}
                       >
                         {esIngreso ? (
-                          <ArrowUpRight className="h-5 w-5" />
+                          <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5" />
                         ) : (
-                          <ArrowDownRight className="h-5 w-5" />
+                          <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5" />
                         )}
                       </div>
 
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-200">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="truncate text-xs sm:text-sm font-semibold text-slate-200">
                             {t.categoria?.nombre ?? "Sin categoría"}
                           </p>
-                          {t.categoria?.grupo && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-medium">
-                              {t.categoria.grupo}
-                            </span>
-                          )}
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium border ${
+                              esEfectivo
+                                ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                                : "bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
+                            }`}
+                          >
+                            {esEfectivo ? "Efectivo" : "Tarjeta"}
+                          </span>
                         </div>
-                        <p className="truncate text-xs text-slate-400 mt-0.5">
+                        <p className="truncate text-[11px] text-slate-400 mt-0.5">
                           {formatearFechaCorta(t.fecha)}
                           {t.descripcion ? ` · ${t.descripcion}` : ""}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0 pl-3">
+                    <div className="flex items-center gap-3 shrink-0 pl-2">
                       <span
-                        className={`text-sm font-bold tabular-nums ${
+                        className={`text-xs sm:text-sm font-bold tabular-nums ${
                           esIngreso ? "text-emerald-400" : "text-slate-100"
                         }`}
                       >

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X, PlusCircle, Pencil, Trash2, Tag, Plus } from "lucide-react";
+import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { CategoryManagerModal } from "./category-manager-modal";
-import type { Categoria, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
+import type { Categoria, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
 
 export interface DatosNuevaTransaccion {
   id?: string;
@@ -12,6 +12,7 @@ export interface DatosNuevaTransaccion {
   categoria_id: string;
   monto: number;
   descripcion: string | null;
+  metodo_pago: MetodoPago;
   fecha?: string;
 }
 
@@ -36,6 +37,7 @@ export function TransactionCaptureModal({
   const [montoTexto, setMontoTexto] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
   const [fecha, setFecha] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
@@ -66,11 +68,13 @@ export function TransactionCaptureModal({
         setMontoTexto(String(transaccionEditar.monto));
         setCategoriaId(transaccionEditar.categoria_id);
         setDescripcion(transaccionEditar.descripcion || "");
+        setMetodoPago(transaccionEditar.metodo_pago || "tarjeta");
         setFecha(transaccionEditar.fecha || "");
       } else {
         setTipo("egreso");
         setMontoTexto("");
         setDescripcion("");
+        setMetodoPago("tarjeta");
         setFecha("");
         const primeraEgreso = categorias.find((c) => c.tipo === "egreso");
         setCategoriaId(primeraEgreso?.id ?? "");
@@ -100,6 +104,7 @@ export function TransactionCaptureModal({
       categoria_id: categoriaId,
       monto,
       descripcion: descripcion.trim() || null,
+      metodo_pago: metodoPago,
       fecha: fecha || undefined,
     });
     onCerrar();
@@ -167,6 +172,39 @@ export function TransactionCaptureModal({
               >
                 Ingreso (+)
               </button>
+            </div>
+
+            {/* Selector de Método / Cuenta (Efectivo vs Tarjeta/Banco) */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1">
+                Cuenta / Método de Pago
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMetodoPago("tarjeta")}
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
+                    metodoPago === "tarjeta"
+                      ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm"
+                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <CreditCard className="h-4 w-4 text-cyan-400" />
+                  Tarjeta / Banco
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMetodoPago("efectivo")}
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
+                    metodoPago === "efectivo"
+                      ? "bg-amber-600/20 border-amber-500 text-amber-300 shadow-sm"
+                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Banknote className="h-4 w-4 text-amber-400" />
+                  Efectivo
+                </button>
+              </div>
             </div>
 
             {/* Input de Monto */}
@@ -245,7 +283,7 @@ export function TransactionCaptureModal({
               <input
                 id="descripcion"
                 type="text"
-                placeholder="Ej. Nómina, Freelance, Proyecto..."
+                placeholder="Ej. Uber, Despensa, Proyecto..."
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-400/60 focus:outline-none"

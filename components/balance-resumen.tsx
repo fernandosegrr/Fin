@@ -119,6 +119,16 @@ export function BalanceResumen({ actual, anterior }: Props) {
             </span>
           </div>
         </div>
+
+        {/* Referencia del mes anterior */}
+        {anterior.balance !== 0 && (
+          <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Mes anterior ({anterior.nombreMes}):</span>
+            <span className="font-semibold tabular-nums text-slate-300">
+              {formatearMonto(anterior.balance)}
+            </span>
+          </div>
+        )}
       </SpotlightCard>
     </section>
   );

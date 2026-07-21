@@ -59,7 +59,7 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const payload: Record<string, any> = {
+  const payload: Record<string, unknown> = {
     user_id: user.id,
     categoria_id: input.categoria_id,
     monto: input.monto,
@@ -111,7 +111,7 @@ export async function actualizarTransaccion(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const payload: Record<string, any> = {
+  const payload: Record<string, unknown> = {
     categoria_id: input.categoria_id,
     monto: input.monto,
     descripcion: input.descripcion?.trim() || null,
@@ -213,9 +213,9 @@ export async function obtenerBalanceMensual(
   const rangoActual = rangoDelMes(anio, mes);
   const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
-  let resHistoricoData: any[] = [];
-  let resActualData: any[] = [];
-  let resAnteriorData: any[] = [];
+  let resHistoricoData: unknown[] = [];
+  let resActualData: unknown[] = [];
+  let resAnteriorData: unknown[] = [];
 
   try {
     const [resHist, resAct, resAnt] = await Promise.all([
@@ -257,13 +257,13 @@ export async function obtenerBalanceMensual(
           .gte("fecha", rangoAnterior.inicio)
           .lt("fecha", rangoAnterior.finExclusivo),
       ]);
-      resHistoricoData = resHist2.data ?? [];
-      resActualData = resAct2.data ?? [];
-      resAnteriorData = resAnt2.data ?? [];
+      resHistoricoData = (resHist2.data ?? []) as unknown[];
+      resActualData = (resAct2.data ?? []) as unknown[];
+      resAnteriorData = (resAnt2.data ?? []) as unknown[];
     } else {
-      resHistoricoData = resHist.data ?? [];
-      resActualData = resAct.data ?? [];
-      resAnteriorData = resAnt.data ?? [];
+      resHistoricoData = (resHist.data ?? []) as unknown[];
+      resActualData = (resAct.data ?? []) as unknown[];
+      resAnteriorData = (resAnt.data ?? []) as unknown[];
     }
   } catch (err) {
     console.error("Error obteniendo balance mensual:", err);

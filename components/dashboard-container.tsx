@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition, useCallback } from "react";
-import { LogOut, Wifi } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BalanceResumen } from "@/components/balance-resumen";
 import { AnalyticsSummary } from "@/components/analytics-summary";

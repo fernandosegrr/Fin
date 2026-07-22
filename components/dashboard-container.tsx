@@ -35,6 +35,19 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   const [mes, setMes] = useState(initialBalance.actual.mes);
   const [isPending, startTransition] = useTransition();
 
+  // Sincronizar estado local cuando los datos del servidor (props) cambian tras un revalidatePath
+  useEffect(() => {
+    setBalance(initialBalance);
+  }, [initialBalance]);
+
+  useEffect(() => {
+    setPresupuestos(initialPresupuestos);
+  }, [initialPresupuestos]);
+
+  useEffect(() => {
+    setGastosRecurrentes(initialGastosRecurrentes);
+  }, [initialGastosRecurrentes]);
+
   // Notificaciones Toast
   const [toast, setToast] = useState<ToastMessage | null>(null);
 

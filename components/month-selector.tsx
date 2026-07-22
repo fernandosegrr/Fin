@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, RotateCcw } from "lucide-react";
 import { capitalizarPrimeraLetra } from "@/lib/format";
-import { nombreDelMes } from "@/lib/dates";
+import { hoyEnMexico, nombreDelMes } from "@/lib/dates";
 
 interface MonthSelectorProps {
   anio: number;
@@ -11,6 +11,9 @@ interface MonthSelectorProps {
 }
 
 export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
+  const hoy = hoyEnMexico();
+  const esMesActual = anio === hoy.anio && mes === hoy.mes;
+
   function irAnterior() {
     if (mes === 1) {
       onCambiarMes(anio - 1, 12);
@@ -25,6 +28,10 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
     } else {
       onCambiarMes(anio, mes + 1);
     }
+  }
+
+  function irMesActual() {
+    onCambiarMes(hoy.anio, hoy.mes);
   }
 
   const nombreMesCapitalizado = capitalizarPrimeraLetra(nombreDelMes(anio, mes));
@@ -45,6 +52,17 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
         <span className="text-xs sm:text-sm font-bold tracking-wide text-slate-100 truncate">
           {nombreMesCapitalizado}
         </span>
+
+        {!esMesActual && (
+          <button
+            type="button"
+            onClick={irMesActual}
+            className="ml-1 inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all"
+            title="Volver al mes actual"
+          >
+            <RotateCcw className="h-2.5 w-2.5" /> Hoy
+          </button>
+        )}
       </div>
 
       <button

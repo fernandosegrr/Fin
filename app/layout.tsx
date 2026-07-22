@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Outfit } from "next/font/google";
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "NexFin Pro - Control Financiero Inteligente",
@@ -29,13 +36,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es" className="dark">
+    <html lang="es" className={`dark ${outfit.variable}`}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white">
+      <body className="bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans">
         <div className="mx-auto min-h-dvh w-full max-w-app sm:max-w-desktop bg-[#070a12]">{children}</div>
       </body>
     </html>

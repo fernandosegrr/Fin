@@ -1,15 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X } from "lucide-react";
+import { startTransition, useOptimistic, useState } from "react";
+import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2 } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
-import { hoyISOEnMexico } from "@/lib/dates";
 import type { Categoria, GastoRecurrente, MetodoPago } from "@/lib/types";
+import {
+  crearGastoRecurrente,
+  eliminarGastoRecurrente,
+} from "@/app/dashboard/actions";
 
 interface Props {
   categorias: Categoria[];
+  /** Gastos recurrentes iniciales cargados desde Supabase (SSR) */
+  initialGastosRecurrentes: GastoRecurrente[];
   onRegistrarTransaccion: (datos: {
     categoria_id: string;
     monto: number;
@@ -19,67 +24,51 @@ interface Props {
   }) => void;
 }
 
-const GASTOS_EJEMPLO_INICIALES: GastoRecurrente[] = [
-  {
-    id: "rec-1",
-    nombre: "Gimnasio",
-    monto: 650,
-    dia_cobro: 5,
-    categoria_id: "",
-    metodo_pago: "tarjeta",
-  },
-  {
-    id: "rec-2",
-    nombre: "Plan Celular / Teléfono",
-    monto: 450,
-    dia_cobro: 15,
-    categoria_id: "",
-    metodo_pago: "tarjeta",
-  },
-];
+let contadorOptimista = 0;
 
-export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props) {
-  const [recurrentes, setRecurrentes] = useState<GastoRecurrente[]>(() => {
-    if (typeof window !== "undefined") {
-      const guardados = localStorage.getItem("nexfin_recurrentes");
-      if (guardados) {
-        try {
-          return JSON.parse(guardados);
-        } catch {
-          // fallback
-        }
-      }
-    }
-    return GASTOS_EJEMPLO_INICIALES;
-  });
-
+export function RecurringExpenses({
+  categorias,
+  initialGastosRecurrentes,
+  onRegistrarTransaccion,
+}: Props) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [montoTexto, setMontoTexto] = useState("");
   const [diaCobro, setDiaCobro] = useState(5);
   const [categoriaId, setCategoriaId] = useState("");
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorForm, setErrorForm] = useState<string | null>(null);
 
   const [cobradosEsteMes, setCobradosEsteMes] = useState<Record<string, boolean>>({});
 
-  function guardarRecurrentes(nuevos: GastoRecurrente[]) {
-    setRecurrentes(nuevos);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("nexfin_recurrentes", JSON.stringify(nuevos));
-    }
-  }
+  // Optimistic UI para eliminaciones y creaciones
+  const [recurrentes, setRecurrentesOptimista] = useOptimistic<
+    GastoRecurrente[],
+    { accion: "crear" | "eliminar"; item: GastoRecurrente }
+  >(initialGastosRecurrentes, (estado, payload) => {
+    if (payload.accion === "crear") return [payload.item, ...estado];
+    if (payload.accion === "eliminar") return estado.filter((r) => r.id !== payload.item.id);
+    return estado;
+  });
 
   const hoyDia = new Date().getDate();
 
-  function agregarRecurrente(e: React.FormEvent) {
+  async function agregarRecurrente(e: React.FormEvent) {
     e.preventDefault();
     const monto = Number.parseFloat(montoTexto.replace(",", "."));
-    if (!nombre.trim() || !Number.isFinite(monto) || monto <= 0) return;
+    if (!nombre.trim() || !Number.isFinite(monto) || monto <= 0) {
+      setErrorForm("Ingresa un nombre y un monto válido.");
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorForm(null);
 
     const catId = categoriaId || (categorias.find((c) => c.tipo === "egreso")?.id ?? "");
 
-    const nuevo: GastoRecurrente = {
-      id: `rec-${Date.now()}`,
+    const itemOptimista: GastoRecurrente = {
+      id: `opt-${++contadorOptimista}`,
       nombre: nombre.trim(),
       monto,
       dia_cobro: Math.min(31, Math.max(1, Number(diaCobro))),
@@ -87,14 +76,36 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
       metodo_pago: metodoPago,
     };
 
-    guardarRecurrentes([...recurrentes, nuevo]);
-    setNombre("");
-    setMontoTexto("");
-    setModalAbierto(false);
+    startTransition(async () => {
+      setRecurrentesOptimista({ accion: "crear", item: itemOptimista });
+      try {
+        await crearGastoRecurrente({
+          nombre: itemOptimista.nombre,
+          monto: itemOptimista.monto,
+          dia_cobro: itemOptimista.dia_cobro,
+          categoria_id: catId,
+          metodo_pago: metodoPago,
+        });
+        setNombre("");
+        setMontoTexto("");
+        setModalAbierto(false);
+      } catch (err) {
+        setErrorForm(err instanceof Error ? err.message : "Error al guardar.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   }
 
-  function eliminarRecurrente(id: string) {
-    guardarRecurrentes(recurrentes.filter((r) => r.id !== id));
+  function eliminarRecurrente(rec: GastoRecurrente) {
+    startTransition(async () => {
+      setRecurrentesOptimista({ accion: "eliminar", item: rec });
+      try {
+        await eliminarGastoRecurrente(rec.id);
+      } catch (err) {
+        console.error("Error al eliminar gasto recurrente:", err);
+      }
+    });
   }
 
   function ejecutarCobro(rec: GastoRecurrente) {
@@ -106,9 +117,10 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
       metodo_pago: rec.metodo_pago,
       tipo: "egreso",
     });
-
     setCobradosEsteMes((prev) => ({ ...prev, [rec.id]: true }));
   }
+
+  const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso");
 
   return (
     <section className="mt-6">
@@ -123,7 +135,8 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
                 Suscripciones y Gastos Recurrentes
               </h2>
               <p className="text-[10px] text-slate-400 mt-0.5">
-                Cobros automáticos y pagos fijos del mes
+                Sincronizados en la nube · {recurrentes.length} programado
+                {recurrentes.length !== 1 ? "s" : ""}
               </p>
             </div>
           </div>
@@ -140,7 +153,14 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
 
         {recurrentes.length === 0 ? (
           <div className="py-6 text-center text-xs text-slate-500">
-            No tienes pagos recurrentes programados. ¡Agrega tu Gym, Teléfono o Renta!
+            No tienes pagos recurrentes programados.{" "}
+            <button
+              type="button"
+              onClick={() => setModalAbierto(true)}
+              className="text-amber-400 hover:underline"
+            >
+              ¡Agrega tu Gym, Teléfono o Renta!
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
@@ -180,7 +200,6 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
                       </span>
                     </div>
 
-                    {/* Status badge */}
                     <div className="mt-1.5">
                       {yaCobrado ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
@@ -220,7 +239,7 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
 
                     <button
                       type="button"
-                      onClick={() => eliminarRecurrente(rec.id)}
+                      onClick={() => eliminarRecurrente(rec)}
                       className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-all"
                       title="Eliminar pago recurrente"
                     >
@@ -245,7 +264,10 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
               </h3>
               <button
                 type="button"
-                onClick={() => setModalAbierto(false)}
+                onClick={() => {
+                  setModalAbierto(false);
+                  setErrorForm(null);
+                }}
                 className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -253,97 +275,131 @@ export function RecurringExpenses({ categorias, onRegistrarTransaccion }: Props)
             </div>
 
             <form onSubmit={agregarRecurrente} className="mt-4 space-y-3.5">
+              {/* Nombre */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Concepto / Nombre</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Concepto / Nombre
+                </label>
                 <input
                   type="text"
-                  placeholder="Ej. Gimnasio, Teléfono, Netflix, Renta..."
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none"
+                  placeholder="Ej. Netflix, Gym, Renta..."
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-amber-400/60 focus:outline-none"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Monto Mensual</label>
+              {/* Monto */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Monto mensual</label>
+                <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-amber-400/60">
+                  <span className="text-lg font-bold text-slate-400 mr-2">$</span>
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="0.00"
                     value={montoTexto}
                     onChange={(e) => setMontoTexto(e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none tabular-nums"
+                    placeholder="0.00"
+                    className="w-full bg-transparent text-xl font-bold text-slate-100 placeholder:text-slate-700 focus:outline-none tabular-nums"
                     required
                   />
                 </div>
+              </div>
 
+              {/* Día de cobro */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Día de cobro (del mes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={diaCobro}
+                  onChange={(e) => setDiaCobro(Number(e.target.value))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-amber-400/60 focus:outline-none"
+                />
+              </div>
+
+              {/* Categoría */}
+              {categoriaEgresoDefault && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Día de Cobro (1-31)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={diaCobro}
-                    onChange={(e) => setDiaCobro(Number(e.target.value))}
-                    className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 focus:outline-none"
-                    required
-                  />
+                  <label className="block text-xs font-medium text-slate-400 mb-1">Categoría</label>
+                  <select
+                    value={categoriaId}
+                    onChange={(e) => setCategoriaId(e.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-amber-400/60 focus:outline-none appearance-none"
+                  >
+                    <option value="">Sin categoría</option>
+                    {categorias
+                      .filter((c) => c.tipo === "egreso")
+                      .map((c) => (
+                        <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                          {c.nombre} {c.grupo ? `(${c.grupo})` : ""}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-              </div>
+              )}
 
+              {/* Método de pago */}
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Categoría</label>
-                <select
-                  value={categoriaId}
-                  onChange={(e) => setCategoriaId(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 focus:outline-none appearance-none"
-                >
-                  {categorias
-                    .filter((c) => c.tipo === "egreso")
-                    .map((c) => (
-                      <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                        {c.nombre} ({c.grupo})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Método de Pago</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Método de pago
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setMetodoPago("tarjeta")}
-                    className={`py-2 text-xs font-semibold rounded-xl border transition-all ${
+                    className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                       metodoPago === "tarjeta"
                         ? "bg-indigo-600/20 border-indigo-500 text-indigo-300"
-                        : "bg-slate-950 border-white/5 text-slate-400"
+                        : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
                     }`}
                   >
-                    💳 Tarjeta
+                    <CreditCard className="h-4 w-4 text-cyan-400" />
+                    Tarjeta
                   </button>
                   <button
                     type="button"
                     onClick={() => setMetodoPago("efectivo")}
-                    className={`py-2 text-xs font-semibold rounded-xl border transition-all ${
+                    className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                       metodoPago === "efectivo"
                         ? "bg-amber-600/20 border-amber-500 text-amber-300"
-                        : "bg-slate-950 border-white/5 text-slate-400"
+                        : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
                     }`}
                   >
-                    💵 Efectivo
+                    <Banknote className="h-4 w-4 text-amber-400" />
+                    Efectivo
                   </button>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <GlowButton type="button" variant="secondary" onClick={() => setModalAbierto(false)}>
+              {errorForm && (
+                <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+                  {errorForm}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <GlowButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setModalAbierto(false);
+                    setErrorForm(null);
+                  }}
+                >
                   Cancelar
                 </GlowButton>
-                <GlowButton type="submit" variant="primary">
-                  Guardar Programación
+                <GlowButton type="submit" variant="primary" disabled={isSaving} className="flex-1">
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  Guardar
                 </GlowButton>
               </div>
             </form>

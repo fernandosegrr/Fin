@@ -5,6 +5,9 @@ const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-outfit)", "system-ui", "-apple-system", "sans-serif"],
+      },
       colors: {
         fintech: {
           bg: "#090d16",

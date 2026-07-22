@@ -16,6 +16,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoCategoria>("egreso");
   const [grupo, setGrupo] = useState<GrupoCategoria>("variable");
+  const [categoriaAEliminar, setCategoriaAEliminar] = useState<Categoria | null>(null);
   
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -43,13 +44,20 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
     });
   }
 
-  function manejarEliminar(id: string) {
-    if (!confirm("¿Seguro que deseas eliminar esta categoría?")) return;
+  function manejarEliminar(cat: Categoria) {
+    // Mostrar confirmación in-modal en vez de confirm() nativo
+    setCategoriaAEliminar(cat);
     setError(null);
+  }
+
+  function confirmarEliminar() {
+    if (!categoriaAEliminar) return;
+    const idAEliminar = categoriaAEliminar.id;
+    setCategoriaAEliminar(null);
 
     startTransition(async () => {
       try {
-        await eliminarCategoria(id);
+        await eliminarCategoria(idAEliminar);
       } catch (err) {
         setError(err instanceof Error ? err.message : "No se pudo eliminar la categoría.");
       }
@@ -188,7 +196,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
 
               <button
                 type="button"
-                onClick={() => manejarEliminar(c.id)}
+                onClick={() => manejarEliminar(c)}
                 disabled={isPending}
                 className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition-all"
                 title="Eliminar categoría"
@@ -199,6 +207,44 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Diálogo de confirmación de eliminación */}
+      {categoriaAEliminar && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm rounded-3xl p-6">
+          <div className="w-full max-w-xs rounded-2xl border border-rose-500/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                <Trash2 className="h-6 w-6 text-rose-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-100">¿Eliminar categoría?</p>
+                <p className="text-xs text-slate-300 mt-1">
+                  <span className="font-semibold text-rose-300">&quot;{categoriaAEliminar.nombre}&quot;</span> será eliminada.
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  ⚠️ Los presupuestos asociados también serán eliminados. Las transacciones quedarán sin categoría.
+                </p>
+              </div>
+              <div className="flex gap-2 w-full mt-1">
+                <button
+                  type="button"
+                  onClick={() => setCategoriaAEliminar(null)}
+                  className="flex-1 py-2 text-xs font-semibold rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-white/30 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEliminar}
+                  className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-lg shadow-rose-600/25"
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

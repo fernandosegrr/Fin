@@ -1,7 +1,7 @@
 /**
  * Script de administración — corre FUERA del runtime de Next.js, usando la
- * secret key (bypassa RLS a propósito) para poder insertar categorías para
- * un user_id específico antes de que ese usuario tenga sesión.
+ * secret key (bypassa RLS a propósito) para poder insertar datos de semilla
+ * para un user_id específico antes de que ese usuario tenga sesión.
  *
  * Uso:
  *   npm run seed -- <user_id>
@@ -47,21 +47,44 @@ interface SemillaCategoria {
 }
 
 const CATEGORIAS_SEMILLA: SemillaCategoria[] = [
-  { nombre: "Proyectos/Clientes", tipo: "ingreso", grupo: null },
-  { nombre: "Suscripciones", tipo: "egreso", grupo: "fijo" },
-  { nombre: "Infraestructura de desarrollo", tipo: "egreso", grupo: "fijo" },
-  { nombre: "Servicios", tipo: "egreso", grupo: "fijo" },
-  { nombre: "Comidas", tipo: "egreso", grupo: "variable" },
-  { nombre: "Salidas en pareja", tipo: "egreso", grupo: "variable" },
+  // Ingresos
+  { nombre: "Proyectos / Clientes", tipo: "ingreso", grupo: null },
+  { nombre: "Salario", tipo: "ingreso", grupo: null },
+  { nombre: "Freelance", tipo: "ingreso", grupo: null },
+  // Egresos fijos
+  { nombre: "Renta / Hipoteca", tipo: "egreso", grupo: "fijo" },
+  { nombre: "Servicios básicos", tipo: "egreso", grupo: "fijo" },
+  { nombre: "Suscripciones digitales", tipo: "egreso", grupo: "fijo" },
+  { nombre: "Infraestructura / Dev", tipo: "egreso", grupo: "fijo" },
+  // Egresos variables
+  { nombre: "Comidas y restaurantes", tipo: "egreso", grupo: "variable" },
+  { nombre: "Despensa / Supermercado", tipo: "egreso", grupo: "variable" },
+  { nombre: "Transporte", tipo: "egreso", grupo: "variable" },
   { nombre: "Entretenimiento", tipo: "egreso", grupo: "variable" },
+  { nombre: "Salidas en pareja", tipo: "egreso", grupo: "variable" },
+  { nombre: "Salud y farmacia", tipo: "egreso", grupo: "variable" },
+  { nombre: "Ropa y accesorios", tipo: "egreso", grupo: "variable" },
 ];
 
-async function main() {
-  console.log(`Sembrando categorías para user_id=${userId}...`);
+interface SemillaGastoRecurrente {
+  nombre: string;
+  monto: number;
+  dia_cobro: number;
+  metodo_pago: "tarjeta" | "efectivo";
+}
+
+const GASTOS_RECURRENTES_SEMILLA: SemillaGastoRecurrente[] = [
+  { nombre: "Netflix", monto: 219, dia_cobro: 5, metodo_pago: "tarjeta" },
+  { nombre: "Spotify", monto: 115, dia_cobro: 10, metodo_pago: "tarjeta" },
+  { nombre: "Plan celular", monto: 450, dia_cobro: 15, metodo_pago: "tarjeta" },
+];
+
+async function seedCategorias(): Promise<Map<string, string>> {
+  console.log("\n📂 Sembrando categorías...");
 
   const { data: existentes, error: errorLectura } = await supabaseAdmin
     .from("categorias")
-    .select("nombre")
+    .select("id, nombre")
     .eq("user_id", userId);
 
   if (errorLectura) {
@@ -69,27 +92,92 @@ async function main() {
     process.exit(1);
   }
 
-  const nombresExistentes = new Set((existentes ?? []).map((c) => c.nombre));
-  const faltantes = CATEGORIAS_SEMILLA.filter((c) => !nombresExistentes.has(c.nombre));
+  const mapaExistentes = new Map((existentes ?? []).map((c) => [c.nombre, c.id]));
+  const faltantes = CATEGORIAS_SEMILLA.filter((c) => !mapaExistentes.has(c.nombre));
 
   if (faltantes.length === 0) {
-    console.log("Ya existen todas las categorías semilla. Nada que hacer.");
+    console.log("  ✓ Todas las categorías semilla ya existen.");
+  } else {
+    const { data: insertadas, error: errorInsercion } = await supabaseAdmin
+      .from("categorias")
+      .insert(faltantes.map((c) => ({ ...c, user_id: userId })))
+      .select("id, nombre");
+
+    if (errorInsercion) {
+      console.error("Error insertando categorías:", errorInsercion.message);
+      process.exit(1);
+    }
+
+    (insertadas ?? []).forEach((c) => mapaExistentes.set(c.nombre, c.id));
+    console.log(`  ✓ ${faltantes.length} categoría(s) creada(s).`);
+    faltantes.forEach((c) =>
+      console.log(`    - ${c.nombre} (${c.tipo}${c.grupo ? "/" + c.grupo : ""})`),
+    );
+  }
+
+  return mapaExistentes;
+}
+
+async function seedGastosRecurrentes(categoriasMapa: Map<string, string>) {
+  console.log("\n🔄 Sembrando gastos recurrentes...");
+
+  const { data: existentes, error } = await supabaseAdmin
+    .from("gastos_recurrentes")
+    .select("nombre")
+    .eq("user_id", userId);
+
+  if (error) {
+    // La tabla puede no existir si el schema no se corrió todavía
+    if (error.message.includes("does not exist") || error.message.includes("relation")) {
+      console.log("  ⚠️  Tabla gastos_recurrentes no encontrada. Corriendo el schema SQL primero.");
+      return;
+    }
+    console.error("  Error:", error.message);
     return;
   }
 
-  const { error: errorInsercion } = await supabaseAdmin
-    .from("categorias")
-    .insert(faltantes.map((c) => ({ ...c, user_id: userId })));
+  const nombresExistentes = new Set((existentes ?? []).map((g) => g.nombre));
+  const faltantes = GASTOS_RECURRENTES_SEMILLA.filter((g) => !nombresExistentes.has(g.nombre));
 
-  if (errorInsercion) {
-    console.error("Error insertando categorías:", errorInsercion.message);
-    process.exit(1);
+  if (faltantes.length === 0) {
+    console.log("  ✓ Todos los gastos recurrentes de semilla ya existen.");
+    return;
   }
 
-  console.log(`Listo: ${faltantes.length} categoría(s) creada(s):`);
-  faltantes.forEach((c) =>
-    console.log(`  - ${c.nombre} (${c.tipo}${c.grupo ? "/" + c.grupo : ""})`),
-  );
+  // Buscar una categoría de egreso fijo para asignar
+  const categoriaFija = [...categoriasMapa.entries()].find(([nombre]) =>
+    ["Suscripciones digitales", "Servicios básicos"].includes(nombre),
+  )?.[1] ?? null;
+
+  const { error: errorInsercion } = await supabaseAdmin
+    .from("gastos_recurrentes")
+    .insert(
+      faltantes.map((g) => ({
+        ...g,
+        user_id: userId,
+        categoria_id: categoriaFija,
+      })),
+    );
+
+  if (errorInsercion) {
+    console.error("  Error insertando gastos recurrentes:", errorInsercion.message);
+    return;
+  }
+
+  console.log(`  ✓ ${faltantes.length} gasto(s) recurrente(s) creado(s).`);
+  faltantes.forEach((g) => console.log(`    - ${g.nombre}: $${g.monto}/mes (día ${g.dia_cobro})`));
 }
 
-main();
+async function main() {
+  console.log(`\n🌱 Iniciando seed para user_id=${userId}...`);
+
+  const categoriasMapa = await seedCategorias();
+  await seedGastosRecurrentes(categoriasMapa);
+
+  console.log("\n✅ Seed completado con éxito.\n");
+}
+
+main().catch((err) => {
+  console.error("❌ Error en seed:", err);
+  process.exit(1);
+});

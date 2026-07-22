@@ -15,20 +15,22 @@ import { ToastNotification, type ToastMessage } from "@/components/toast-notific
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { ShinyText } from "@/components/react-bits/ShinyText";
-import { obtenerBalanceMensual, obtenerPresupuestosConGasto, crearTransaccion, signOut, type BalanceMensual } from "@/app/dashboard/actions";
+import { obtenerBalanceMensual, obtenerPresupuestosConGasto, obtenerGastosRecurrentes, crearTransaccion, signOut, type BalanceMensual } from "@/app/dashboard/actions";
 import { primerDiaDelMes } from "@/lib/dates";
-import type { Categoria, MetodoPago, PresupuestoConGasto } from "@/lib/types";
+import type { Categoria, GastoRecurrente, MetodoPago, PresupuestoConGasto } from "@/lib/types";
 
 interface Props {
   initialBalance: BalanceMensual;
   initialPresupuestos: PresupuestoConGasto[];
+  initialGastosRecurrentes: GastoRecurrente[];
   categorias: Categoria[];
 }
 
-export function DashboardContainer({ initialBalance, initialPresupuestos, categorias }: Props) {
+export function DashboardContainer({ initialBalance, initialPresupuestos, initialGastosRecurrentes, categorias }: Props) {
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [balance, setBalance] = useState<BalanceMensual>(initialBalance);
   const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>(initialPresupuestos);
+  const [gastosRecurrentes, setGastosRecurrentes] = useState<GastoRecurrente[]>(initialGastosRecurrentes);
   const [anio, setAnio] = useState(initialBalance.actual.anio);
   const [mes, setMes] = useState(initialBalance.actual.mes);
   const [isPending, startTransition] = useTransition();
@@ -48,12 +50,14 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
 
     startTransition(async () => {
       try {
-        const [nuevoBalance, nuevosPresupuestos] = await Promise.all([
+        const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
           obtenerBalanceMensual(anio, mes),
           obtenerPresupuestosConGasto(anio, mes),
+          obtenerGastosRecurrentes(),
         ]);
         setBalance(nuevoBalance);
         setPresupuestos(nuevosPresupuestos);
+        setGastosRecurrentes(nuevosRecurrentes);
       } catch (err) {
         console.error("Error recargando datos del dashboard:", err);
       }
@@ -88,6 +92,17 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
           recargarDatos();
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "gastos_recurrentes",
+        },
+        () => {
+          recargarDatos();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -107,6 +122,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
         ]);
         setBalance(nuevoBalance);
         setPresupuestos(nuevosPresupuestos);
+        // Los gastos recurrentes no cambian con el mes, no hay que recargarlos
       } catch (err) {
         console.error("Error cambiando de mes:", err);
       }
@@ -221,6 +237,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, catego
           <div className="space-y-4 animate-in fade-in duration-300">
             <RecurringExpenses
               categorias={categorias}
+              initialGastosRecurrentes={gastosRecurrentes}
               onRegistrarTransaccion={registrarGastoRecurrente}
             />
           </div>

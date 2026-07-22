@@ -17,7 +17,7 @@ export function ExportButton({ transacciones, nombreMes }: Props) {
     }
 
     // Cabecera CSV
-    const headers = ["Fecha", "Categoría", "Tipo", "Grupo", "Descripción", "Monto"];
+    const headers = ["Fecha", "Categoría", "Tipo", "Grupo", "Método de Pago", "Descripción", "Monto"];
     
     // Filas CSV
     const rows = transacciones.map((t) => [
@@ -25,6 +25,7 @@ export function ExportButton({ transacciones, nombreMes }: Props) {
       `"${(t.categoria?.nombre || "Sin categoría").replace(/"/g, '""')}"`,
       t.categoria?.tipo || "",
       t.categoria?.grupo || "",
+      t.metodo_pago || "tarjeta",
       `"${(t.descripcion || "").replace(/"/g, '""')}"`,
       t.monto,
     ]);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote } from "lucide-react";
+import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote, Calendar } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { CategoryManagerModal } from "./category-manager-modal";
 import type { Categoria, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
@@ -75,7 +75,8 @@ export function TransactionCaptureModal({
         setMontoTexto("");
         setDescripcion("");
         setMetodoPago("tarjeta");
-        setFecha("");
+        // Usar fecha de hoy por defecto en nuevas transacciones
+        setFecha(new Date().toISOString().split("T")[0]);
         const primeraEgreso = categorias.find((c) => c.tipo === "egreso");
         setCategoriaId(primeraEgreso?.id ?? "");
       }
@@ -288,6 +289,23 @@ export function TransactionCaptureModal({
                 onChange={(e) => setDescripcion(e.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-400/60 focus:outline-none"
               />
+            </div>
+
+            {/* Fecha */}
+            <div>
+              <label htmlFor="fecha" className="block text-xs font-medium text-slate-400 mb-1">
+                Fecha
+              </label>
+              <div className="relative flex items-center rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 focus-within:border-indigo-400/60">
+                <Calendar className="h-4 w-4 text-slate-500 mr-2 shrink-0" />
+                <input
+                  id="fecha"
+                  type="date"
+                  value={fecha}
+                  onChange={(e) => setFecha(e.target.value)}
+                  className="w-full bg-transparent text-sm text-slate-100 focus:outline-none"
+                />
+              </div>
             </div>
 
             {error && (

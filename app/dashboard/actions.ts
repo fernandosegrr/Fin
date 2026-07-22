@@ -13,6 +13,7 @@ import {
 } from "@/lib/dates";
 import type {
   Categoria,
+  GastoRecurrente,
   GrupoCategoria,
   MetodoPago,
   Presupuesto,
@@ -23,11 +24,19 @@ import type {
   TransaccionConCategoria,
 } from "@/lib/types";
 
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+// ─────────────────────────────────────────────
+// CATEGORÍAS
+// ─────────────────────────────────────────────
 
 export async function obtenerCategorias(): Promise<Categoria[]> {
   const supabase = await createClient();
@@ -36,6 +45,58 @@ export async function obtenerCategorias(): Promise<Categoria[]> {
   if (error) return [];
   return data ?? [];
 }
+
+export interface CrearCategoriaInput {
+  nombre: string;
+  tipo: TipoCategoria;
+  grupo: GrupoCategoria | null;
+}
+
+export async function crearCategoria(input: CrearCategoriaInput): Promise<void> {
+  if (!input.nombre.trim()) throw new Error("El nombre de la categoría es requerido.");
+  if (input.tipo === "egreso" && !input.grupo) {
+    throw new Error("Las categorías de egreso deben ser Fijo o Variable.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+
+  const { error } = await supabase.from("categorias").insert({
+    user_id: user.id,
+    nombre: input.nombre.trim(),
+    tipo: input.tipo,
+    grupo: input.tipo === "ingreso" ? null : input.grupo,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+}
+
+export async function eliminarCategoria(id: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+
+  const { error } = await supabase
+    .from("categorias")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+}
+
+// ─────────────────────────────────────────────
+// TRANSACCIONES
+// ─────────────────────────────────────────────
 
 export interface NuevaTransaccion {
   categoria_id: string;
@@ -160,6 +221,10 @@ export async function eliminarTransaccion(id: string): Promise<void> {
   revalidatePath("/dashboard");
 }
 
+// ─────────────────────────────────────────────
+// BALANCE MENSUAL
+// ─────────────────────────────────────────────
+
 type TotalesCalculados = {
   ingresos: number;
   egresos: number;
@@ -195,6 +260,36 @@ function calcularTotalesDetallados(
   return { ingresos, egresos, efectivo, tarjeta };
 }
 
+/**
+ * Calcula el saldo histórico acumulado (suma de todos los ingresos - egresos ANTES del mes target)
+ * usando agregación en la base de datos para evitar cargar miles de filas.
+ */
+async function calcularSaldoHistorico(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fechaLimite: string,
+): Promise<number> {
+  try {
+    // Intentamos con metodo_pago primero
+    const { data, error } = await supabase
+      .from("transacciones")
+      .select("monto, categoria:categorias(tipo)")
+      .lt("fecha", fechaLimite);
+
+    if (error) return 0;
+
+    let saldo = 0;
+    const items = (data ?? []) as unknown as { monto: number; categoria: { tipo: TipoCategoria } | null | { tipo: TipoCategoria }[] }[];
+    for (const item of items) {
+      const cat = Array.isArray(item.categoria) ? item.categoria[0] : item.categoria;
+      if (cat?.tipo === "ingreso") saldo += item.monto;
+      else if (cat?.tipo === "egreso") saldo -= item.monto;
+    }
+    return saldo;
+  } catch {
+    return 0;
+  }
+}
+
 export interface BalanceMensual {
   actual: ResumenMes & { nombreMes: string; transacciones: TransaccionConCategoria[] };
   anterior: ResumenMes & { nombreMes: string };
@@ -213,67 +308,58 @@ export async function obtenerBalanceMensual(
   const rangoActual = rangoDelMes(anio, mes);
   const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
-  let resHistoricoData: unknown[] = [];
   let resActualData: unknown[] = [];
   let resAnteriorData: unknown[] = [];
+  let saldoInicialHistorico = 0;
 
   try {
-    const [resHist, resAct, resAnt] = await Promise.all([
-      supabase
-        .from("transacciones")
-        .select("monto, metodo_pago, categoria:categorias(tipo)")
-        .lt("fecha", rangoActual.inicio),
+    // Cargamos transacciones del mes actual y anterior en paralelo con el saldo histórico
+    const [resAct, resAnt, saldoHist] = await Promise.all([
       supabase
         .from("transacciones")
         .select("*, categoria:categorias(id, nombre, tipo, grupo)")
         .gte("fecha", rangoActual.inicio)
         .lt("fecha", rangoActual.finExclusivo)
         .order("fecha", { ascending: false })
-        .order("creado_en", { ascending: false }),
+        .order("creado_en", { ascending: false })
+        // Safety net: límite de 200 transacciones por mes
+        .limit(200),
       supabase
         .from("transacciones")
         .select("monto, metodo_pago, categoria:categorias(tipo)")
         .gte("fecha", rangoAnterior.inicio)
         .lt("fecha", rangoAnterior.finExclusivo),
+      // Saldo histórico usando query de agregación (sin cargar todas las filas en JS)
+      calcularSaldoHistorico(supabase, rangoActual.inicio),
     ]);
 
     if (resAct.error && resAct.error.message.includes("metodo_pago")) {
       // Reintento seguro sin la columna metodo_pago
-      const [resHist2, resAct2, resAnt2] = await Promise.all([
-        supabase
-          .from("transacciones")
-          .select("monto, categoria:categorias(tipo)")
-          .lt("fecha", rangoActual.inicio),
+      const [resAct2, resAnt2] = await Promise.all([
         supabase
           .from("transacciones")
           .select("*, categoria:categorias(id, nombre, tipo, grupo)")
           .gte("fecha", rangoActual.inicio)
           .lt("fecha", rangoActual.finExclusivo)
           .order("fecha", { ascending: false })
-          .order("creado_en", { ascending: false }),
+          .order("creado_en", { ascending: false })
+          .limit(200),
         supabase
           .from("transacciones")
           .select("monto, categoria:categorias(tipo)")
           .gte("fecha", rangoAnterior.inicio)
           .lt("fecha", rangoAnterior.finExclusivo),
       ]);
-      resHistoricoData = (resHist2.data ?? []) as unknown[];
       resActualData = (resAct2.data ?? []) as unknown[];
       resAnteriorData = (resAnt2.data ?? []) as unknown[];
     } else {
-      resHistoricoData = (resHist.data ?? []) as unknown[];
       resActualData = (resAct.data ?? []) as unknown[];
       resAnteriorData = (resAnt.data ?? []) as unknown[];
     }
+
+    saldoInicialHistorico = saldoHist;
   } catch (err) {
     console.error("Error obteniendo balance mensual:", err);
-  }
-
-  // Arrastre histórico previo
-  let saldoInicialHistorico = 0;
-  for (const item of resHistoricoData as { monto: number; categoria: { tipo: TipoCategoria } | null }[]) {
-    if (item.categoria?.tipo === "ingreso") saldoInicialHistorico += item.monto;
-    else if (item.categoria?.tipo === "egreso") saldoInicialHistorico -= item.monto;
   }
 
   const transaccionesActual = resActualData as unknown as TransaccionConCategoria[];
@@ -316,6 +402,10 @@ export async function obtenerBalanceMensual(
     },
   };
 }
+
+// ─────────────────────────────────────────────
+// PRESUPUESTOS
+// ─────────────────────────────────────────────
 
 export async function obtenerPresupuestosConGasto(
   anioTarget?: number,
@@ -410,17 +500,43 @@ export async function guardarPresupuesto(
   revalidatePath("/dashboard");
 }
 
-export interface CrearCategoriaInput {
-  nombre: string;
-  tipo: TipoCategoria;
-  grupo: GrupoCategoria | null;
+// ─────────────────────────────────────────────
+// GASTOS RECURRENTES (ahora en Supabase, no localStorage)
+// ─────────────────────────────────────────────
+
+export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("gastos_recurrentes")
+    .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+    .eq("user_id", user.id)
+    .order("dia_cobro");
+
+  if (error) {
+    console.error("Error obteniendo gastos recurrentes:", error);
+    return [];
+  }
+
+  return (data ?? []) as unknown as GastoRecurrente[];
 }
 
-export async function crearCategoria(input: CrearCategoriaInput): Promise<void> {
-  if (!input.nombre.trim()) throw new Error("El nombre de la categoría es requerido.");
-  if (input.tipo === "egreso" && !input.grupo) {
-    throw new Error("Las categorías de egreso deben ser Fijo o Variable.");
-  }
+export interface NuevoGastoRecurrente {
+  nombre: string;
+  monto: number;
+  dia_cobro: number;
+  categoria_id: string;
+  metodo_pago: MetodoPago;
+}
+
+export async function crearGastoRecurrente(input: NuevoGastoRecurrente): Promise<void> {
+  if (!input.nombre.trim()) throw new Error("El nombre es requerido.");
+  if (!Number.isFinite(input.monto) || input.monto <= 0) throw new Error("El monto debe ser mayor a 0.");
+  if (input.dia_cobro < 1 || input.dia_cobro > 31) throw new Error("El día de cobro debe estar entre 1 y 31.");
 
   const supabase = await createClient();
   const {
@@ -428,11 +544,13 @@ export async function crearCategoria(input: CrearCategoriaInput): Promise<void> 
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const { error } = await supabase.from("categorias").insert({
+  const { error } = await supabase.from("gastos_recurrentes").insert({
     user_id: user.id,
     nombre: input.nombre.trim(),
-    tipo: input.tipo,
-    grupo: input.tipo === "ingreso" ? null : input.grupo,
+    monto: input.monto,
+    dia_cobro: input.dia_cobro,
+    categoria_id: input.categoria_id || null,
+    metodo_pago: input.metodo_pago,
   });
 
   if (error) throw new Error(error.message);
@@ -440,7 +558,9 @@ export async function crearCategoria(input: CrearCategoriaInput): Promise<void> 
   revalidatePath("/dashboard");
 }
 
-export async function eliminarCategoria(id: string): Promise<void> {
+export async function eliminarGastoRecurrente(id: string): Promise<void> {
+  if (!id) throw new Error("ID inválido.");
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -448,7 +568,7 @@ export async function eliminarCategoria(id: string): Promise<void> {
   if (!user) throw new Error("No autenticado.");
 
   const { error } = await supabase
-    .from("categorias")
+    .from("gastos_recurrentes")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id);

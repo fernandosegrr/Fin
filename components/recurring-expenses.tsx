@@ -108,13 +108,13 @@ export function RecurringExpenses({
     });
   }
 
-  function ejecutarCobro(rec: GastoRecurrente) {
+  function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
     const catId = rec.categoria_id || (categorias.find((c) => c.tipo === "egreso")?.id ?? "");
     onRegistrarTransaccion({
       categoria_id: catId,
       monto: rec.monto,
       descripcion: `Pago recurrente: ${rec.nombre}`,
-      metodo_pago: rec.metodo_pago,
+      metodo_pago: metodoPagoElegido,
       tipo: "egreso",
     });
     setCobradosEsteMes((prev) => ({ ...prev, [rec.id]: true }));
@@ -222,20 +222,33 @@ export function RecurringExpenses({
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => ejecutarCobro(rec)}
-                      disabled={yaCobrado}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-                        yaCobrado
-                          ? "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
-                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 active:scale-95"
-                      }`}
-                      title="Registrar cobro en las transacciones del mes"
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      {yaCobrado ? "Cobrado" : "Cobrar"}
-                    </button>
+                    {yaCobrado ? (
+                      <span className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-500 opacity-50 flex items-center gap-1">
+                        <Zap className="h-3.5 w-3.5" /> Cobrado
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 p-1 rounded-xl">
+                        <span className="text-[10px] font-bold text-emerald-400 pl-1 pr-0.5 uppercase tracking-wider hidden sm:inline">
+                          Pagar:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => ejecutarCobro(rec, "tarjeta")}
+                          className="p-1.5 rounded-lg text-emerald-400 hover:bg-cyan-500 hover:text-white transition-all shadow-sm active:scale-95"
+                          title="Pagar con Tarjeta"
+                        >
+                          <CreditCard className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => ejecutarCobro(rec, "efectivo")}
+                          className="p-1.5 rounded-lg text-emerald-400 hover:bg-amber-500 hover:text-white transition-all shadow-sm active:scale-95"
+                          title="Pagar en Efectivo"
+                        >
+                          <Banknote className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     <button
                       type="button"

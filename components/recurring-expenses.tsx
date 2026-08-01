@@ -1,11 +1,11 @@
 "use client";
 
-import { startTransition, useOptimistic, useState } from "react";
+import { startTransition, useMemo, useOptimistic, useState } from "react";
 import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2 } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
-import type { Categoria, GastoRecurrente, MetodoPago } from "@/lib/types";
+import type { Categoria, GastoRecurrente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
 import {
   crearGastoRecurrente,
   eliminarGastoRecurrente,
@@ -15,11 +15,14 @@ interface Props {
   categorias: Categoria[];
   /** Gastos recurrentes iniciales cargados desde Supabase (SSR) */
   initialGastosRecurrentes: GastoRecurrente[];
+  /** Transacciones del mes en curso: se usan para saber qué ya se cobró (viene de la BD, no de memoria). */
+  transaccionesDelMes: Pick<TransaccionConCategoria, "gasto_recurrente_id">[];
   onRegistrarTransaccion: (datos: {
     categoria_id: string;
     monto: number;
     descripcion: string;
     metodo_pago: MetodoPago;
+    gasto_recurrente_id: string;
     tipo: "egreso";
   }) => void;
 }
@@ -29,6 +32,7 @@ let contadorOptimista = 0;
 export function RecurringExpenses({
   categorias,
   initialGastosRecurrentes,
+  transaccionesDelMes,
   onRegistrarTransaccion,
 }: Props) {
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -40,7 +44,15 @@ export function RecurringExpenses({
   const [isSaving, setIsSaving] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
-  const [cobradosEsteMes, setCobradosEsteMes] = useState<Record<string, boolean>>({});
+  // Derivado de las transacciones reales del mes (no memoria del navegador): sobrevive
+  // a cambios de pestaña/refrescos y evita cobrar la misma suscripción dos veces.
+  const cobradosEsteMes = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of transaccionesDelMes) {
+      if (t.gasto_recurrente_id) ids.add(t.gasto_recurrente_id);
+    }
+    return ids;
+  }, [transaccionesDelMes]);
 
   // Optimistic UI para eliminaciones y creaciones
   const [recurrentes, setRecurrentesOptimista] = useOptimistic<
@@ -115,9 +127,9 @@ export function RecurringExpenses({
       monto: rec.monto,
       descripcion: `Pago recurrente: ${rec.nombre}`,
       metodo_pago: metodoPagoElegido,
+      gasto_recurrente_id: rec.id,
       tipo: "egreso",
     });
-    setCobradosEsteMes((prev) => ({ ...prev, [rec.id]: true }));
   }
 
   const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso");
@@ -165,7 +177,7 @@ export function RecurringExpenses({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
             {recurrentes.map((rec) => {
-              const yaCobrado = cobradosEsteMes[rec.id];
+              const yaCobrado = cobradosEsteMes.has(rec.id);
               const diasRestantes = rec.dia_cobro - hoyDia;
               const esHoy = rec.dia_cobro === hoyDia;
 

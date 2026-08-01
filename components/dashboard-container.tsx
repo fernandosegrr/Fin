@@ -147,6 +147,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     monto: number;
     descripcion: string;
     metodo_pago: MetodoPago;
+    gasto_recurrente_id: string;
   }) {
     startTransition(async () => {
       try {
@@ -155,6 +156,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           monto: datos.monto,
           descripcion: datos.descripcion,
           metodo_pago: datos.metodo_pago,
+          gasto_recurrente_id: datos.gasto_recurrente_id,
         });
         recargarDatos({
           texto: `¡Cobro de ${datos.descripcion} registrado con éxito! ⚡`,
@@ -235,7 +237,11 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         {/* Pestaña 1: INICIO (Saldo Total + Movimientos del Mes) */}
         {tabActiva === "inicio" && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <BalanceResumen actual={balance.actual} anterior={balance.anterior} />
+            <BalanceResumen
+              actual={balance.actual}
+              anterior={balance.anterior}
+              onTransferenciaRealizada={recargarDatos}
+            />
             <TransactionsSection
               key={`${anio}-${mes}`}
               initialTransacciones={balance.actual.transacciones}
@@ -251,6 +257,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             <RecurringExpenses
               categorias={categorias}
               initialGastosRecurrentes={gastosRecurrentes}
+              transaccionesDelMes={balance.actual.transacciones}
               onRegistrarTransaccion={registrarGastoRecurrente}
             />
           </div>

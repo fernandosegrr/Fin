@@ -22,6 +22,7 @@ import type {
   TipoCategoria,
   Transaccion,
   TransaccionConCategoria,
+  Transferencia,
 } from "@/lib/types";
 
 // ─────────────────────────────────────────────
@@ -104,6 +105,8 @@ export interface NuevaTransaccion {
   descripcion: string | null;
   metodo_pago?: MetodoPago;
   fecha?: string;
+  /** Suscripción/gasto recurrente que originó este cobro, si aplica. */
+  gasto_recurrente_id?: string | null;
 }
 
 export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
@@ -131,13 +134,17 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   if (input.metodo_pago) {
     payload.metodo_pago = input.metodo_pago;
   }
+  if (input.gasto_recurrente_id) {
+    payload.gasto_recurrente_id = input.gasto_recurrente_id;
+  }
 
   const { error } = await supabase.from("transacciones").insert(payload);
 
   if (error) {
-    // Fallback si la columna metodo_pago no existe todavía en Supabase
-    if (error.message.includes("metodo_pago")) {
+    // Fallback si alguna columna todavía no existe en Supabase (migración pendiente)
+    if (error.message.includes("metodo_pago") || error.message.includes("gasto_recurrente_id")) {
       delete payload.metodo_pago;
+      delete payload.gasto_recurrente_id;
       const { error: retryError } = await supabase.from("transacciones").insert(payload);
       if (retryError) throw new Error(retryError.message);
     } else {
@@ -222,6 +229,56 @@ export async function eliminarTransaccion(id: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
+// TRASPASOS ENTRE MÉTODOS DE PAGO (Efectivo ⇄ Tarjeta)
+// ─────────────────────────────────────────────
+// Un traspaso mueve saldo de un método a otro. No es ingreso ni egreso: el
+// patrimonio total no cambia, por eso vive en su propia tabla y no toca
+// categorías, presupuestos ni los totales de ingresos/egresos.
+
+export interface NuevaTransferencia {
+  monto: number;
+  origen: MetodoPago;
+  destino: MetodoPago;
+  descripcion?: string | null;
+  fecha?: string;
+}
+
+export async function crearTransferencia(input: NuevaTransferencia): Promise<void> {
+  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+    throw new Error("El monto debe ser mayor a 0.");
+  }
+  if (input.origen === input.destino) {
+    throw new Error("Elige dos métodos de pago distintos.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado.");
+
+  const { error } = await supabase.from("transferencias").insert({
+    user_id: user.id,
+    monto: input.monto,
+    origen: input.origen,
+    destino: input.destino,
+    fecha: input.fecha || hoyISOEnMexico(),
+    descripcion: input.descripcion?.trim() || null,
+  });
+
+  if (error) {
+    if (error.message.includes("does not exist") || error.message.includes("relation")) {
+      throw new Error(
+        "Falta crear la tabla 'transferencias' en Supabase. Corre el script actualizado de supabase/schema.sql.",
+      );
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard");
+}
+
+// ─────────────────────────────────────────────
 // BALANCE MENSUAL
 // ─────────────────────────────────────────────
 
@@ -261,33 +318,95 @@ function calcularTotalesDetallados(
 }
 
 /**
- * Calcula el saldo histórico acumulado (suma de todos los ingresos - egresos ANTES del mes target)
- * usando agregación en la base de datos para evitar cargar miles de filas.
+ * Aplica traspasos entre métodos de pago al `neto` por método, in place.
+ * Un traspaso NO es ingreso ni egreso (no toca `ingresos`/`egresos` totales):
+ * solo mueve saldo de un método al otro, así que su efecto neto combinado
+ * (efectivo.neto + tarjeta.neto) siempre es cero.
  */
-async function calcularSaldoHistorico(
+function aplicarTransferencias(
+  totales: TotalesCalculados,
+  transferencias: { monto: number; origen: MetodoPago; destino: MetodoPago }[],
+): void {
+  for (const t of transferencias) {
+    if (t.origen === "efectivo") totales.efectivo.neto -= t.monto;
+    else totales.tarjeta.neto -= t.monto;
+
+    if (t.destino === "efectivo") totales.efectivo.neto += t.monto;
+    else totales.tarjeta.neto += t.monto;
+  }
+}
+
+type SaldosHistoricos = { total: number; efectivo: number; tarjeta: number };
+
+/**
+ * Calcula el saldo histórico acumulado (suma de ingresos - egresos - traspasos
+ * de TODO lo ocurrido ANTES de fechaLimite), separado por método de pago,
+ * usando agregación en la base de datos para evitar cargar miles de filas.
+ *
+ * Esto es lo que hace que "Efectivo" y "Tarjeta" sean saldos reales que se
+ * arrastran mes a mes (igual que el Saldo Total Disponible), en vez de
+ * reiniciarse a los movimientos del mes en curso.
+ */
+async function calcularSaldosHistoricos(
   supabase: Awaited<ReturnType<typeof createClient>>,
   fechaLimite: string,
-): Promise<number> {
+): Promise<SaldosHistoricos> {
+  let efectivo = 0;
+  let tarjeta = 0;
+
   try {
-    // Intentamos con metodo_pago primero
     const { data, error } = await supabase
       .from("transacciones")
-      .select("monto, categoria:categorias(tipo)")
+      .select("monto, metodo_pago, categoria:categorias(tipo)")
       .lt("fecha", fechaLimite);
 
-    if (error) return 0;
-
-    let saldo = 0;
-    const items = (data ?? []) as unknown as { monto: number; categoria: { tipo: TipoCategoria } | null | { tipo: TipoCategoria }[] }[];
-    for (const item of items) {
-      const cat = Array.isArray(item.categoria) ? item.categoria[0] : item.categoria;
-      if (cat?.tipo === "ingreso") saldo += item.monto;
-      else if (cat?.tipo === "egreso") saldo -= item.monto;
+    if (!error) {
+      const items = (data ?? []) as unknown as {
+        monto: number;
+        metodo_pago?: MetodoPago;
+        categoria: { tipo: TipoCategoria } | null | { tipo: TipoCategoria }[];
+      }[];
+      for (const item of items) {
+        const cat = Array.isArray(item.categoria) ? item.categoria[0] : item.categoria;
+        const esEfectivo = item.metodo_pago === "efectivo";
+        if (cat?.tipo === "ingreso") {
+          if (esEfectivo) efectivo += item.monto;
+          else tarjeta += item.monto;
+        } else if (cat?.tipo === "egreso") {
+          if (esEfectivo) efectivo -= item.monto;
+          else tarjeta -= item.monto;
+        }
+      }
     }
-    return saldo;
   } catch {
-    return 0;
+    // Seguimos con lo acumulado hasta el momento.
   }
+
+  try {
+    // Tabla nueva: puede no existir todavía si no se corrió la migración.
+    const { data, error } = await supabase
+      .from("transferencias")
+      .select("monto, origen, destino")
+      .lt("fecha", fechaLimite);
+
+    if (!error) {
+      const traspasos = (data ?? []) as unknown as {
+        monto: number;
+        origen: MetodoPago;
+        destino: MetodoPago;
+      }[];
+      for (const t of traspasos) {
+        if (t.origen === "efectivo") efectivo -= t.monto;
+        else tarjeta -= t.monto;
+        if (t.destino === "efectivo") efectivo += t.monto;
+        else tarjeta += t.monto;
+      }
+    }
+  } catch {
+    // Tabla transferencias no disponible todavía: no afecta el resto del cálculo.
+  }
+
+  return { total: efectivo + tarjeta, efectivo, tarjeta };
 }
 
 export interface BalanceMensual {
@@ -310,11 +429,13 @@ export async function obtenerBalanceMensual(
 
   let resActualData: unknown[] = [];
   let resAnteriorData: unknown[] = [];
-  let saldoInicialHistorico = 0;
+  let transferenciasActualData: unknown[] = [];
+  let saldosHistoricos: SaldosHistoricos = { total: 0, efectivo: 0, tarjeta: 0 };
 
   try {
-    // Cargamos transacciones del mes actual y anterior en paralelo con el saldo histórico
-    const [resAct, resAnt, saldoHist] = await Promise.all([
+    // Cargamos transacciones del mes actual y anterior, traspasos del mes
+    // actual, y el saldo histórico por método, todo en paralelo.
+    const [resAct, resAnt, resTransf, saldosHist] = await Promise.all([
       supabase
         .from("transacciones")
         .select("*, categoria:categorias(id, nombre, tipo, grupo)")
@@ -329,8 +450,14 @@ export async function obtenerBalanceMensual(
         .select("monto, metodo_pago, categoria:categorias(tipo)")
         .gte("fecha", rangoAnterior.inicio)
         .lt("fecha", rangoAnterior.finExclusivo),
-      // Saldo histórico usando query de agregación (sin cargar todas las filas en JS)
-      calcularSaldoHistorico(supabase, rangoActual.inicio),
+      supabase
+        .from("transferencias")
+        .select("*")
+        .gte("fecha", rangoActual.inicio)
+        .lt("fecha", rangoActual.finExclusivo)
+        .order("fecha", { ascending: false }),
+      // Saldo histórico (total y por método) usando query de agregación
+      calcularSaldosHistoricos(supabase, rangoActual.inicio),
     ]);
 
     if (resAct.error && resAct.error.message.includes("metodo_pago")) {
@@ -357,13 +484,20 @@ export async function obtenerBalanceMensual(
       resAnteriorData = (resAnt.data ?? []) as unknown[];
     }
 
-    saldoInicialHistorico = saldoHist;
+    // La tabla transferencias es nueva: puede no existir todavía (migración pendiente).
+    transferenciasActualData = resTransf.error ? [] : (resTransf.data ?? []);
+
+    saldosHistoricos = saldosHist;
   } catch (err) {
     console.error("Error obteniendo balance mensual:", err);
   }
 
   const transaccionesActual = resActualData as unknown as TransaccionConCategoria[];
+  const transferenciasActual = transferenciasActualData as unknown as Transferencia[];
+
   const totalesActual = calcularTotalesDetallados(transaccionesActual);
+  aplicarTransferencias(totalesActual, transferenciasActual);
+
   const totalesAnterior = calcularTotalesDetallados(
     resAnteriorData as unknown as {
       monto: number;
@@ -382,10 +516,17 @@ export async function obtenerBalanceMensual(
       ingresos: totalesActual.ingresos,
       egresos: totalesActual.egresos,
       balance: balanceNetoActual,
-      saldoInicial: saldoInicialHistorico,
-      saldoTotalDisponible: saldoInicialHistorico + balanceNetoActual,
-      totalesEfectivo: totalesActual.efectivo,
-      totalesTarjeta: totalesActual.tarjeta,
+      saldoInicial: saldosHistoricos.total,
+      saldoTotalDisponible: saldosHistoricos.total + balanceNetoActual,
+      totalesEfectivo: {
+        ...totalesActual.efectivo,
+        saldo: saldosHistoricos.efectivo + totalesActual.efectivo.neto,
+      },
+      totalesTarjeta: {
+        ...totalesActual.tarjeta,
+        saldo: saldosHistoricos.tarjeta + totalesActual.tarjeta.neto,
+      },
+      transferencias: transferenciasActual,
       transacciones: transaccionesActual,
     },
     anterior: {
@@ -397,8 +538,9 @@ export async function obtenerBalanceMensual(
       balance: totalesAnterior.ingresos - totalesAnterior.egresos,
       saldoInicial: 0,
       saldoTotalDisponible: totalesAnterior.ingresos - totalesAnterior.egresos,
-      totalesEfectivo: totalesAnterior.efectivo,
-      totalesTarjeta: totalesAnterior.tarjeta,
+      totalesEfectivo: { ...totalesAnterior.efectivo, saldo: totalesAnterior.efectivo.neto },
+      totalesTarjeta: { ...totalesAnterior.tarjeta, saldo: totalesAnterior.tarjeta.neto },
+      transferencias: [],
     },
   };
 }

@@ -18,6 +18,20 @@ export interface Transaccion {
   fecha: string; // 'YYYY-MM-DD'
   descripcion: string | null;
   metodo_pago?: MetodoPago;
+  /** Suscripción/gasto recurrente que generó esta transacción, si aplica. */
+  gasto_recurrente_id?: string | null;
+  creado_en: string;
+}
+
+/** Traspaso de dinero entre métodos de pago. No es ingreso ni egreso: no afecta el patrimonio total. */
+export interface Transferencia {
+  id: string;
+  user_id: string;
+  monto: number;
+  origen: MetodoPago;
+  destino: MetodoPago;
+  fecha: string; // 'YYYY-MM-DD'
+  descripcion: string | null;
   creado_en: string;
 }
 
@@ -45,6 +59,15 @@ export interface GastoRecurrente {
   categoria?: Pick<Categoria, "id" | "nombre" | "tipo" | "grupo"> | null;
 }
 
+/** Desglose de ingresos/egresos/saldo de un método de pago dentro de un mes. */
+export interface DesgloseMetodoPago {
+  ingresos: number; // ingresos de ESTE mes con este método
+  egresos: number; // egresos de ESTE mes con este método
+  neto: number; // ingresos - egresos de ESTE mes (incluye traspasos del mes)
+  /** Saldo acumulado a la fecha con este método (histórico + este mes + traspasos). Es el "cuánto tengo" real. */
+  saldo: number;
+}
+
 /** Resumen de ingresos/egresos/balance de un mes calendario. */
 export interface ResumenMes {
   anio: number;
@@ -54,8 +77,10 @@ export interface ResumenMes {
   balance: number; // Balance exclusivo del mes (Ingresos - Egresos)
   saldoInicial: number; // Arrastre acumulado de todos los meses anteriores
   saldoTotalDisponible: number; // saldoInicial + balance
-  totalesEfectivo: { ingresos: number; egresos: number; neto: number };
-  totalesTarjeta: { ingresos: number; egresos: number; neto: number };
+  totalesEfectivo: DesgloseMetodoPago;
+  totalesTarjeta: DesgloseMetodoPago;
+  /** Traspasos entre métodos de pago registrados este mes. */
+  transferencias: Transferencia[];
 }
 
 export interface PresupuestoConGasto {

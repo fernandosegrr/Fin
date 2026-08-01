@@ -117,3 +117,37 @@ create policy "gastos_recurrentes_por_usuario" on public.gastos_recurrentes
   for all to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Vincula cada transacción con la suscripción que la generó (si aplica), para
+-- poder saber con certeza —consultando la BD, no memoria del navegador— si una
+-- suscripción ya se cobró este mes. Va después de gastos_recurrentes porque
+-- depende de esa tabla. on delete set null: borrar la suscripción no borra el
+-- historial de cobros ya registrados.
+alter table public.transacciones add column if not exists gasto_recurrente_id uuid references public.gastos_recurrentes (id) on delete set null;
+
+create index if not exists transacciones_gasto_recurrente_idx on public.transacciones (gasto_recurrente_id);
+
+-- ========================================================== transferencias
+-- Traspasos de dinero entre Efectivo y Tarjeta/Banco. No son ingreso ni egreso
+-- real (el patrimonio total no cambia), por eso viven en su propia tabla y no
+-- afectan los totales de ingresos/egresos ni los presupuestos por categoría.
+create table if not exists public.transferencias (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  monto       numeric not null check (monto > 0),
+  origen      text not null check (origen in ('tarjeta', 'efectivo')),
+  destino     text not null check (destino in ('tarjeta', 'efectivo')),
+  fecha       date not null default current_date,
+  descripcion text,
+  creado_en   timestamptz not null default now(),
+  constraint origen_distinto_destino check (origen <> destino)
+);
+
+create index if not exists transferencias_user_fecha_idx on public.transferencias (user_id, fecha desc);
+
+alter table public.transferencias enable row level security;
+
+create policy "transferencias_por_usuario" on public.transferencias
+  for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

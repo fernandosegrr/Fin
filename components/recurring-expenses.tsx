@@ -5,6 +5,7 @@ import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote,
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
+import { hoyEnMexico } from "@/lib/dates";
 import type { Categoria, GastoRecurrente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
 import {
   crearGastoRecurrente,
@@ -64,7 +65,7 @@ export function RecurringExpenses({
     return estado;
   });
 
-  const hoyDia = new Date().getDate();
+  const hoyDia = hoyEnMexico().dia;
 
   async function agregarRecurrente(e: React.FormEvent) {
     e.preventDefault();

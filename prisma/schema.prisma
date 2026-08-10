@@ -1,0 +1,123 @@
+// Prisma gestiona el ESQUEMA y las MIGRACIONES de la base de datos.
+// A propósito, NO se usa Prisma Client para las consultas de la app en
+// runtime (esas siguen en lib/supabase/*.ts vía supabase-js): toda la
+// seguridad de esta app depende de Row Level Security por usuario
+// (auth.uid() = user_id), y Prisma se conecta con un rol de Postgres que
+// pasa por encima de RLS. Usar Prisma ahí abriría una fuga de datos entre
+// usuarios. Prisma sí se usa en scripts/seed.ts: es un script de
+// administración de confianza que corre fuera de cualquier sesión de
+// usuario, exactamente el contexto donde tiene sentido saltarse RLS.
+//
+// auth.users (tabla de Supabase Auth) vive fuera de este schema a propósito:
+// las columnas user_id de abajo son uuid planos, y la FK real hacia
+// auth.users, además de las políticas RLS y el trigger, viven en SQL crudo
+// dentro de prisma/migrations/ (Prisma no modela RLS/políticas nativamente).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// La connection string vive en prisma.config.ts (Prisma 7 ya no la acepta
+// aquí), no en este archivo.
+datasource db {
+  provider = "postgresql"
+}
+
+enum TipoCategoria {
+  ingreso
+  egreso
+
+  @@map("tipo_categoria")
+}
+
+enum GrupoCategoria {
+  fijo
+  variable
+
+  @@map("grupo_categoria")
+}
+
+model Categoria {
+  id     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String          @map("user_id") @db.Uuid
+  nombre String
+  tipo   TipoCategoria
+  grupo  GrupoCategoria?
+
+  transacciones     Transaccion[]
+  presupuestos      Presupuesto[]
+  gastosRecurrentes GastoRecurrente[]
+
+  @@index([userId, tipo])
+  @@map("categorias")
+}
+
+model Transaccion {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  categoriaId String   @map("categoria_id") @db.Uuid
+  monto       Decimal  @db.Decimal
+  fecha       DateTime @default(now()) @db.Date
+  /// Valores válidos: 'tarjeta' | 'efectivo' (CHECK constraint en la BD, no modelado aquí).
+  metodoPago  String   @default("tarjeta") @map("metodo_pago")
+  descripcion String?
+  /// Suscripción/gasto recurrente que originó esta transacción, si aplica.
+  gastoRecurrenteId String?  @map("gasto_recurrente_id") @db.Uuid
+  creadoEn          DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  categoria       Categoria        @relation(fields: [categoriaId], references: [id])
+  gastoRecurrente GastoRecurrente? @relation(fields: [gastoRecurrenteId], references: [id])
+
+  @@index([userId, fecha(sort: Desc)])
+  @@index([userId, categoriaId])
+  @@index([gastoRecurrenteId])
+  @@map("transacciones")
+}
+
+model Presupuesto {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  categoriaId String   @map("categoria_id") @db.Uuid
+  montoLimite Decimal  @map("monto_limite") @db.Decimal
+  /// Primer día del mes que presupuesta, p. ej. 2026-08-01.
+  mes         DateTime @db.Date
+
+  categoria Categoria @relation(fields: [categoriaId], references: [id])
+
+  @@unique([userId, categoriaId, mes])
+  @@index([userId, mes])
+  @@map("presupuestos")
+}
+
+model GastoRecurrente {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  nombre      String
+  monto       Decimal  @db.Decimal
+  diaCobro    Int      @map("dia_cobro")
+  categoriaId String?  @map("categoria_id") @db.Uuid
+  /// Valores válidos: 'tarjeta' | 'efectivo' (CHECK constraint en la BD, no modelado aquí).
+  metodoPago  String   @default("tarjeta") @map("metodo_pago")
+  creadoEn    DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  categoria     Categoria?    @relation(fields: [categoriaId], references: [id])
+  transacciones Transaccion[]
+
+  @@index([userId, diaCobro])
+  @@map("gastos_recurrentes")
+}
+
+model Transferencia {
+  id     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String  @map("user_id") @db.Uuid
+  monto  Decimal @db.Decimal
+  /// Valores válidos: 'tarjeta' | 'efectivo' (CHECK constraint en la BD, no modelado aquí).
+  origen      String
+  destino     String
+  fecha       DateTime @default(now()) @db.Date
+  descripcion String?
+  creadoEn    DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@index([userId, fecha(sort: Desc)])
+  @@map("transferencias")
+}

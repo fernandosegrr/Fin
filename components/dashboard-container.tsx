@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, useCallback } from "react";
+import { useEffect, useRef, useState, useTransition, useCallback } from "react";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BalanceResumen } from "@/components/balance-resumen";
@@ -34,24 +34,28 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   const [anio, setAnio] = useState(initialBalance.actual.anio);
   const [mes, setMes] = useState(initialBalance.actual.mes);
   const [isPending, startTransition] = useTransition();
+  const [conexionEnVivo, setConexionEnVivo] = useState(false);
 
-  // Sincronizar estado local cuando los datos del servidor (props) cambian tras un revalidatePath
-  useEffect(() => {
-    setBalance(initialBalance);
-  }, [initialBalance]);
-
-  useEffect(() => {
-    setPresupuestos(initialPresupuestos);
-  }, [initialPresupuestos]);
-
-  useEffect(() => {
-    setGastosRecurrentes(initialGastosRecurrentes);
-  }, [initialGastosRecurrentes]);
+  // NOTA: `initial*` (props) solo se usan para sembrar el estado en el primer
+  // render (SSR). NO se re-sincronizan en un useEffect: cada revalidatePath()
+  // de un Server Action re-renderiza DashboardPage con el MES ACTUAL (sin
+  // saber qué mes está viendo este cliente), así que un efecto que copie esas
+  // props a este estado pisaría el mes seleccionado con datos de otro mes.
+  // A partir del primer render, este componente es la única fuente de verdad
+  // para balance/presupuestos/gastosRecurrentes; se refrescan explícitamente
+  // vía recargarDatos()/cambiarMes() (disparados por mutaciones locales,
+  // Realtime, o al recuperar el foco — ver los efectos más abajo).
 
   // Notificaciones Toast
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  // Recarga silenciosa en tiempo real (invocada por WebSockets o Server Actions)
+  // Evita que una respuesta vieja (p. ej. una recarga disparada por Realtime
+  // justo antes de cambiar de mes) sobreescriba con datos obsoletos el
+  // resultado de una solicitud más reciente que ya resolvió.
+  const solicitudIdRef = useRef(0);
+
+  // Recarga silenciosa en tiempo real (invocada por WebSockets, Server Actions
+  // locales, o al recuperar el foco/conexión)
   const recargarDatos = useCallback((mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => {
     if (mensajeToast) {
       setToast({
@@ -61,6 +65,8 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       });
     }
 
+    const idSolicitud = ++solicitudIdRef.current;
+
     startTransition(async () => {
       try {
         const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
@@ -68,11 +74,18 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           obtenerPresupuestosConGasto(anio, mes),
           obtenerGastosRecurrentes(),
         ]);
+        if (solicitudIdRef.current !== idSolicitud) return;
         setBalance(nuevoBalance);
         setPresupuestos(nuevosPresupuestos);
         setGastosRecurrentes(nuevosRecurrentes);
       } catch (err) {
+        if (solicitudIdRef.current !== idSolicitud) return;
         console.error("Error recargando datos del dashboard:", err);
+        setToast({
+          id: String(Date.now()),
+          texto: "No se pudieron actualizar los datos. Los que ves en pantalla podrían no ser los más recientes.",
+          tipo: "error",
+        });
       }
     });
   }, [anio, mes]);
@@ -80,52 +93,71 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   // SUSCRIPCIÓN EN TIEMPO REAL VÍA SUPABASE WEBSOCKETS ⚡
   useEffect(() => {
     const supabase = createClient();
+    let canal: ReturnType<typeof supabase.channel> | null = null;
+    let cancelado = false;
+    // Empieza en `true` para no tratar la primera conexión como una
+    // "reconexión" (evitaría una recarga redundante justo tras el SSR inicial).
+    let estabaConectado = true;
 
-    const canalTransacciones = supabase
-      .channel(`realtime_dashboard_${anio}_${mes}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "transacciones",
-        },
-        () => {
-          recargarDatos();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "presupuestos",
-        },
-        () => {
-          recargarDatos();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "gastos_recurrentes",
-        },
-        () => {
-          recargarDatos();
-        }
-      )
-      .subscribe();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelado || !session?.user) return;
+      const filtro = `user_id=eq.${session.user.id}`;
+
+      canal = supabase
+        .channel(`realtime_dashboard_${anio}_${mes}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
+        .subscribe((status) => {
+          const conectado = status === "SUBSCRIBED";
+          setConexionEnVivo(conectado);
+          // Si el canal se había caído (celular en background, red inestable)
+          // y se reconecta, pudimos perder eventos mientras estuvo caído:
+          // refrescamos para no quedarnos con datos desfasados.
+          if (conectado && !estabaConectado) {
+            recargarDatos();
+          }
+          estabaConectado = conectado;
+        });
+    });
 
     return () => {
-      supabase.removeChannel(canalTransacciones);
+      cancelado = true;
+      setConexionEnVivo(false);
+      if (canal) supabase.removeChannel(canal);
     };
   }, [anio, mes, recargarDatos]);
+
+  // Refrescar al recuperar visibilidad/foco o reconectar a internet. La app
+  // es una PWA sin Service Worker: si se manda a segundo plano (o el celular
+  // se bloquea) por un rato, el sistema operativo suspende la pestaña/WebView
+  // pero React sigue montado con el último estado que tenía — no vuelve a
+  // pedir datos solo. Sin esto, al reabrir se ven cifras de hace horas, y de
+  // paso el canal de Realtime pudo haberse cerrado sin que la reconexión
+  // llegue a dispararse (ver efecto de arriba, que sí cubre ese caso, pero
+  // solo si el canal realmente reintenta la conexión).
+  useEffect(() => {
+    function alRecuperarActividad() {
+      if (document.visibilityState === "visible") {
+        recargarDatos();
+      }
+    }
+    document.addEventListener("visibilitychange", alRecuperarActividad);
+    window.addEventListener("focus", alRecuperarActividad);
+    window.addEventListener("online", alRecuperarActividad);
+    return () => {
+      document.removeEventListener("visibilitychange", alRecuperarActividad);
+      window.removeEventListener("focus", alRecuperarActividad);
+      window.removeEventListener("online", alRecuperarActividad);
+    };
+  }, [recargarDatos]);
 
   function cambiarMes(nuevoAnio: number, nuevoMes: number) {
     setAnio(nuevoAnio);
     setMes(nuevoMes);
+
+    const idSolicitud = ++solicitudIdRef.current;
 
     startTransition(async () => {
       try {
@@ -133,11 +165,18 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           obtenerBalanceMensual(nuevoAnio, nuevoMes),
           obtenerPresupuestosConGasto(nuevoAnio, nuevoMes),
         ]);
+        if (solicitudIdRef.current !== idSolicitud) return;
         setBalance(nuevoBalance);
         setPresupuestos(nuevosPresupuestos);
         // Los gastos recurrentes no cambian con el mes, no hay que recargarlos
       } catch (err) {
+        if (solicitudIdRef.current !== idSolicitud) return;
         console.error("Error cambiando de mes:", err);
+        setToast({
+          id: String(Date.now()),
+          texto: "No se pudo cargar ese mes. Intenta de nuevo.",
+          tipo: "error",
+        });
       }
     });
   }
@@ -196,12 +235,22 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
               NexFin <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
             </h1>
-            <p className="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1 font-medium">
+            <p
+              className={`text-[10px] mt-0.5 flex items-center gap-1 font-medium ${
+                conexionEnVivo ? "text-emerald-400" : "text-slate-500"
+              }`}
+            >
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                {conexionEnVivo && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                )}
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    conexionEnVivo ? "bg-emerald-500" : "bg-slate-600"
+                  }`}
+                ></span>
               </span>
-              En Vivo (WebSocket)
+              {conexionEnVivo ? "En Vivo (WebSocket)" : "Reconectando…"}
             </p>
           </div>
         </div>
@@ -269,6 +318,8 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             <AnalyticsSummary
               transacciones={balance.actual.transacciones}
               totalEgresos={balance.actual.egresos}
+              anio={anio}
+              mes={mes}
             />
             <FinancialCharts
               transacciones={balance.actual.transacciones}

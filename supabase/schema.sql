@@ -3,8 +3,11 @@
 -- Si ya tienes tablas, usa los bloques "alter table ... add column if not exists".
 
 -- ─────────────────────────────────────────────────────────── ENUMS
-create type if not exists tipo_categoria as enum ('ingreso', 'egreso');
-create type if not exists grupo_categoria as enum ('fijo', 'variable');
+-- `create type` no soporta `if not exists` en Postgres (a diferencia de
+-- `create table`/`create index`) — este script es para una base NUEVA, así
+-- que no hace falta esa guarda aquí.
+create type tipo_categoria as enum ('ingreso', 'egreso');
+create type grupo_categoria as enum ('fijo', 'variable');
 
 -- ================================================================ categorias
 create table if not exists public.categorias (
@@ -91,7 +94,9 @@ begin
 end;
 $$;
 
-create trigger if not exists presupuestos_rechazar_ingreso
+-- `create trigger` tampoco soporta `if not exists` (sí existe `create or
+-- replace trigger` desde Postgres 14, pero un trigger nuevo no lo necesita).
+create trigger presupuestos_rechazar_ingreso
   before insert or update on public.presupuestos
   for each row execute function public.rechazar_presupuesto_ingreso();
 
@@ -151,3 +156,45 @@ create policy "transferencias_por_usuario" on public.transferencias
   for all to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ============================================== calcular_saldo_historico()
+-- Suma TODO el historial de transacciones + traspasos anteriores a una fecha,
+-- separado por método de pago, agregando dentro de Postgres (SUM/FILTER) en
+-- vez de traer cada fila a Node — así no hay techo de filas (PostgREST limita
+-- las consultas normales a ~1000 filas por defecto). SECURITY INVOKER
+-- (default) + filtro por auth.uid(): respeta el mismo límite que ya imponen
+-- las políticas RLS de arriba.
+create or replace function public.calcular_saldo_historico(p_fecha_limite date)
+returns table (efectivo numeric, tarjeta numeric)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  with movimientos as (
+    select
+      t.metodo_pago as metodo,
+      case when c.tipo = 'ingreso' then t.monto else -t.monto end as delta
+    from public.transacciones t
+    join public.categorias c on c.id = t.categoria_id
+    where t.user_id = auth.uid() and t.fecha < p_fecha_limite
+
+    union all
+
+    select origen as metodo, -monto as delta
+    from public.transferencias
+    where user_id = auth.uid() and fecha < p_fecha_limite
+
+    union all
+
+    select destino as metodo, monto as delta
+    from public.transferencias
+    where user_id = auth.uid() and fecha < p_fecha_limite
+  )
+  select
+    coalesce(sum(delta) filter (where metodo = 'efectivo'), 0)::numeric as efectivo,
+    coalesce(sum(delta) filter (where metodo = 'tarjeta'), 0)::numeric as tarjeta
+  from movimientos;
+$$;
+
+grant execute on function public.calcular_saldo_historico(date) to authenticated;

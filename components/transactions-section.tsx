@@ -108,13 +108,14 @@ export function TransactionsSection({ initialTransacciones, categorias, onTransa
       });
     } else {
       // Crear
+      const fecha = datos.fecha || hoyISOEnMexico();
       const nueva: TransaccionOptimista = {
         id: `optimista-${contadorOptimista}`,
         user_id: "",
         categoria_id: datos.categoria_id,
         monto: datos.monto,
         metodo_pago: datos.metodo_pago,
-        fecha: hoyISOEnMexico(),
+        fecha,
         descripcion: datos.descripcion,
         creado_en: "",
         categoria: categoria
@@ -132,6 +133,7 @@ export function TransactionsSection({ initialTransacciones, categorias, onTransa
             monto: datos.monto,
             descripcion: datos.descripcion,
             metodo_pago: datos.metodo_pago,
+            fecha,
           });
           onTransaccionCambiada?.({
             texto: esIngreso

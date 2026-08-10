@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote, Calendar } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { CategoryManagerModal } from "./category-manager-modal";
+import { hoyISOEnMexico } from "@/lib/dates";
 import type { Categoria, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
 
 export interface DatosNuevaTransaccion {
@@ -75,8 +76,9 @@ export function TransactionCaptureModal({
         setMontoTexto("");
         setDescripcion("");
         setMetodoPago("tarjeta");
-        // Usar fecha de hoy por defecto en nuevas transacciones
-        setFecha(new Date().toISOString().split("T")[0]);
+        // Usar fecha de hoy por defecto en nuevas transacciones (zona horaria
+        // de México, no UTC: pasadas las 18:00 UTC ya es "mañana" en UTC)
+        setFecha(hoyISOEnMexico());
         const primeraEgreso = categorias.find((c) => c.tipo === "egreso");
         setCategoriaId(primeraEgreso?.id ?? "");
       }

@@ -1,7 +1,8 @@
 /**
- * Script de administración — corre FUERA del runtime de Next.js, usando la
- * secret key (bypassa RLS a propósito) para poder insertar datos de semilla
- * para un user_id específico antes de que ese usuario tenga sesión.
+ * Script de administración — corre FUERA del runtime de Next.js, usando
+ * Prisma con conexión directa a Postgres (bypassa RLS a propósito) para
+ * poder insertar datos de semilla para un user_id específico antes de que
+ * ese usuario tenga sesión.
  *
  * Uso:
  *   npm run seed -- <user_id>
@@ -10,23 +11,19 @@
  * El user_id es el UUID de auth.users — cópialo desde Supabase Dashboard →
  * Authentication → Users, después de crear tu cuenta desde /login.
  *
- * Nunca importes este archivo desde código de la app (usa la secret key).
+ * Nunca importes este archivo desde código de la app (usa conexión directa).
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { createClient } from "@supabase/supabase-js";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient, TipoCategoria, GrupoCategoria } from "@prisma/client";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const DATABASE_URL = process.env.DATABASE_URL;
 const userId = process.argv[2] ?? process.env.SEED_USER_ID;
 
-if (!SUPABASE_URL || SUPABASE_URL.includes("TU-PROYECTO")) {
-  console.error("Falta NEXT_PUBLIC_SUPABASE_URL real en .env.local.");
-  process.exit(1);
-}
-if (!SECRET_KEY) {
-  console.error("Falta SUPABASE_SECRET_KEY en .env.local.");
+if (!DATABASE_URL) {
+  console.error("Falta DATABASE_URL en .env.local. Ver .env.example.");
   process.exit(1);
 }
 if (!userId) {
@@ -36,14 +33,14 @@ if (!userId) {
   process.exit(1);
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SECRET_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: DATABASE_URL }),
 });
 
 interface SemillaCategoria {
   nombre: string;
-  tipo: "ingreso" | "egreso";
-  grupo: "fijo" | "variable" | null;
+  tipo: TipoCategoria;
+  grupo: GrupoCategoria | null;
 }
 
 const CATEGORIAS_SEMILLA: SemillaCategoria[] = [
@@ -79,36 +76,31 @@ const GASTOS_RECURRENTES_SEMILLA: SemillaGastoRecurrente[] = [
   { nombre: "Plan celular", monto: 450, dia_cobro: 15, metodo_pago: "tarjeta" },
 ];
 
-async function seedCategorias(): Promise<Map<string, string>> {
+async function seedCategorias(userId: string): Promise<Map<string, string>> {
   console.log("\n📂 Sembrando categorías...");
 
-  const { data: existentes, error: errorLectura } = await supabaseAdmin
-    .from("categorias")
-    .select("id, nombre")
-    .eq("user_id", userId);
+  const existentes = await prisma.categoria.findMany({
+    where: { userId },
+    select: { id: true, nombre: true },
+  });
 
-  if (errorLectura) {
-    console.error("Error leyendo categorías existentes:", errorLectura.message);
-    process.exit(1);
-  }
-
-  const mapaExistentes = new Map((existentes ?? []).map((c) => [c.nombre, c.id]));
+  const mapaExistentes = new Map(existentes.map((c) => [c.nombre, c.id]));
   const faltantes = CATEGORIAS_SEMILLA.filter((c) => !mapaExistentes.has(c.nombre));
 
   if (faltantes.length === 0) {
     console.log("  ✓ Todas las categorías semilla ya existen.");
   } else {
-    const { data: insertadas, error: errorInsercion } = await supabaseAdmin
-      .from("categorias")
-      .insert(faltantes.map((c) => ({ ...c, user_id: userId })))
-      .select("id, nombre");
+    const insertadas = await prisma.categoria.createManyAndReturn({
+      data: faltantes.map((c) => ({
+        userId,
+        nombre: c.nombre,
+        tipo: c.tipo,
+        grupo: c.grupo,
+      })),
+      select: { id: true, nombre: true },
+    });
 
-    if (errorInsercion) {
-      console.error("Error insertando categorías:", errorInsercion.message);
-      process.exit(1);
-    }
-
-    (insertadas ?? []).forEach((c) => mapaExistentes.set(c.nombre, c.id));
+    insertadas.forEach((c) => mapaExistentes.set(c.nombre, c.id));
     console.log(`  ✓ ${faltantes.length} categoría(s) creada(s).`);
     faltantes.forEach((c) =>
       console.log(`    - ${c.nombre} (${c.tipo}${c.grupo ? "/" + c.grupo : ""})`),
@@ -118,25 +110,15 @@ async function seedCategorias(): Promise<Map<string, string>> {
   return mapaExistentes;
 }
 
-async function seedGastosRecurrentes(categoriasMapa: Map<string, string>) {
+async function seedGastosRecurrentes(userId: string, categoriasMapa: Map<string, string>) {
   console.log("\n🔄 Sembrando gastos recurrentes...");
 
-  const { data: existentes, error } = await supabaseAdmin
-    .from("gastos_recurrentes")
-    .select("nombre")
-    .eq("user_id", userId);
+  const existentes = await prisma.gastoRecurrente.findMany({
+    where: { userId },
+    select: { nombre: true },
+  });
 
-  if (error) {
-    // La tabla puede no existir si el schema no se corrió todavía
-    if (error.message.includes("does not exist") || error.message.includes("relation")) {
-      console.log("  ⚠️  Tabla gastos_recurrentes no encontrada. Corriendo el schema SQL primero.");
-      return;
-    }
-    console.error("  Error:", error.message);
-    return;
-  }
-
-  const nombresExistentes = new Set((existentes ?? []).map((g) => g.nombre));
+  const nombresExistentes = new Set(existentes.map((g) => g.nombre));
   const faltantes = GASTOS_RECURRENTES_SEMILLA.filter((g) => !nombresExistentes.has(g.nombre));
 
   if (faltantes.length === 0) {
@@ -149,20 +131,16 @@ async function seedGastosRecurrentes(categoriasMapa: Map<string, string>) {
     ["Suscripciones digitales", "Servicios básicos"].includes(nombre),
   )?.[1] ?? null;
 
-  const { error: errorInsercion } = await supabaseAdmin
-    .from("gastos_recurrentes")
-    .insert(
-      faltantes.map((g) => ({
-        ...g,
-        user_id: userId,
-        categoria_id: categoriaFija,
-      })),
-    );
-
-  if (errorInsercion) {
-    console.error("  Error insertando gastos recurrentes:", errorInsercion.message);
-    return;
-  }
+  await prisma.gastoRecurrente.createMany({
+    data: faltantes.map((g) => ({
+      nombre: g.nombre,
+      monto: g.monto,
+      diaCobro: g.dia_cobro,
+      metodoPago: g.metodo_pago,
+      userId,
+      categoriaId: categoriaFija,
+    })),
+  });
 
   console.log(`  ✓ ${faltantes.length} gasto(s) recurrente(s) creado(s).`);
   faltantes.forEach((g) => console.log(`    - ${g.nombre}: $${g.monto}/mes (día ${g.dia_cobro})`));
@@ -171,13 +149,15 @@ async function seedGastosRecurrentes(categoriasMapa: Map<string, string>) {
 async function main() {
   console.log(`\n🌱 Iniciando seed para user_id=${userId}...`);
 
-  const categoriasMapa = await seedCategorias();
-  await seedGastosRecurrentes(categoriasMapa);
+  const categoriasMapa = await seedCategorias(userId!);
+  await seedGastosRecurrentes(userId!, categoriasMapa);
 
   console.log("\n✅ Seed completado con éxito.\n");
 }
 
-main().catch((err) => {
-  console.error("❌ Error en seed:", err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("❌ Error en seed:", err);
+    process.exitCode = 1;
+  })
+  .finally(() => prisma.$disconnect());

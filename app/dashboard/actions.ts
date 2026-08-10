@@ -43,7 +43,7 @@ export async function obtenerCategorias(): Promise<Categoria[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("categorias").select("*").order("nombre");
 
-  if (error) return [];
+  if (error) throw new Error(`No se pudieron cargar las categorías: ${error.message}`);
   return data ?? [];
 }
 
@@ -123,34 +123,17 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const payload: Record<string, unknown> = {
+  const { error } = await supabase.from("transacciones").insert({
     user_id: user.id,
     categoria_id: input.categoria_id,
     monto: input.monto,
     fecha: input.fecha || hoyISOEnMexico(),
     descripcion: input.descripcion?.trim() || null,
-  };
+    metodo_pago: input.metodo_pago ?? "tarjeta",
+    gasto_recurrente_id: input.gasto_recurrente_id ?? null,
+  });
 
-  if (input.metodo_pago) {
-    payload.metodo_pago = input.metodo_pago;
-  }
-  if (input.gasto_recurrente_id) {
-    payload.gasto_recurrente_id = input.gasto_recurrente_id;
-  }
-
-  const { error } = await supabase.from("transacciones").insert(payload);
-
-  if (error) {
-    // Fallback si alguna columna todavía no existe en Supabase (migración pendiente)
-    if (error.message.includes("metodo_pago") || error.message.includes("gasto_recurrente_id")) {
-      delete payload.metodo_pago;
-      delete payload.gasto_recurrente_id;
-      const { error: retryError } = await supabase.from("transacciones").insert(payload);
-      if (retryError) throw new Error(retryError.message);
-    } else {
-      throw new Error(error.message);
-    }
-  }
+  if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");
 }
@@ -179,31 +162,19 @@ export async function actualizarTransaccion(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado.");
 
-  const payload: Record<string, unknown> = {
-    categoria_id: input.categoria_id,
-    monto: input.monto,
-    descripcion: input.descripcion?.trim() || null,
-    ...(input.fecha ? { fecha: input.fecha } : {}),
-  };
-
-  if (input.metodo_pago) {
-    payload.metodo_pago = input.metodo_pago;
-  }
-
   const { error } = await supabase
     .from("transacciones")
-    .update(payload)
+    .update({
+      categoria_id: input.categoria_id,
+      monto: input.monto,
+      descripcion: input.descripcion?.trim() || null,
+      metodo_pago: input.metodo_pago ?? "tarjeta",
+      ...(input.fecha ? { fecha: input.fecha } : {}),
+    })
     .eq("id", id)
     .eq("user_id", user.id);
 
-  if (error) {
-    if (error.message.includes("metodo_pago")) {
-      delete payload.metodo_pago;
-      await supabase.from("transacciones").update(payload).eq("id", id).eq("user_id", user.id);
-    } else {
-      throw new Error(error.message);
-    }
-  }
+  if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");
 }
@@ -266,14 +237,7 @@ export async function crearTransferencia(input: NuevaTransferencia): Promise<voi
     descripcion: input.descripcion?.trim() || null,
   });
 
-  if (error) {
-    if (error.message.includes("does not exist") || error.message.includes("relation")) {
-      throw new Error(
-        "Falta crear la tabla 'transferencias' en Supabase. Corre el script actualizado de supabase/schema.sql.",
-      );
-    }
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");
 }
@@ -351,61 +315,23 @@ async function calcularSaldosHistoricos(
   supabase: Awaited<ReturnType<typeof createClient>>,
   fechaLimite: string,
 ): Promise<SaldosHistoricos> {
-  let efectivo = 0;
-  let tarjeta = 0;
+  // Agregación hecha en Postgres (función calcular_saldo_historico, ver
+  // prisma/migrations): suma TODO el historial sin traerlo a Node, así que no
+  // hay techo de filas. El cálculo anterior traía cada transacción histórica
+  // a JS y las sumaba ahí — por encima de las ~1000 filas que Supabase
+  // devuelve por defecto en una consulta normal, el saldo quedaba mal sin
+  // ningún aviso.
+  const { data, error } = await supabase
+    .rpc("calcular_saldo_historico", { p_fecha_limite: fechaLimite })
+    .single();
 
-  try {
-    const { data, error } = await supabase
-      .from("transacciones")
-      .select("monto, metodo_pago, categoria:categorias(tipo)")
-      .lt("fecha", fechaLimite);
+  if (error) throw new Error(`No se pudo calcular el saldo histórico: ${error.message}`);
 
-    if (!error) {
-      const items = (data ?? []) as unknown as {
-        monto: number;
-        metodo_pago?: MetodoPago;
-        categoria: { tipo: TipoCategoria } | null | { tipo: TipoCategoria }[];
-      }[];
-      for (const item of items) {
-        const cat = Array.isArray(item.categoria) ? item.categoria[0] : item.categoria;
-        const esEfectivo = item.metodo_pago === "efectivo";
-        if (cat?.tipo === "ingreso") {
-          if (esEfectivo) efectivo += item.monto;
-          else tarjeta += item.monto;
-        } else if (cat?.tipo === "egreso") {
-          if (esEfectivo) efectivo -= item.monto;
-          else tarjeta -= item.monto;
-        }
-      }
-    }
-  } catch {
-    // Seguimos con lo acumulado hasta el momento.
-  }
-
-  try {
-    // Tabla nueva: puede no existir todavía si no se corrió la migración.
-    const { data, error } = await supabase
-      .from("transferencias")
-      .select("monto, origen, destino")
-      .lt("fecha", fechaLimite);
-
-    if (!error) {
-      const traspasos = (data ?? []) as unknown as {
-        monto: number;
-        origen: MetodoPago;
-        destino: MetodoPago;
-      }[];
-      for (const t of traspasos) {
-        if (t.origen === "efectivo") efectivo -= t.monto;
-        else tarjeta -= t.monto;
-        if (t.destino === "efectivo") efectivo += t.monto;
-        else tarjeta += t.monto;
-      }
-    }
-  } catch {
-    // Tabla transferencias no disponible todavía: no afecta el resto del cálculo.
-  }
-
+  // El cliente de Supabase no está tipado con las funciones RPC del proyecto
+  // (no hay Database generado), así que el resultado llega como `unknown`.
+  const fila = data as unknown as { efectivo: number | string; tarjeta: number | string } | null;
+  const efectivo = Number(fila?.efectivo ?? 0);
+  const tarjeta = Number(fila?.tarjeta ?? 0);
   return { total: efectivo + tarjeta, efectivo, tarjeta };
 }
 
@@ -427,79 +353,68 @@ export async function obtenerBalanceMensual(
   const rangoActual = rangoDelMes(anio, mes);
   const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
-  let resActualData: unknown[] = [];
-  let resAnteriorData: unknown[] = [];
-  let transferenciasActualData: unknown[] = [];
-  let saldosHistoricos: SaldosHistoricos = { total: 0, efectivo: 0, tarjeta: 0 };
+  // Cargamos, todo en paralelo:
+  // - la LISTA de transacciones del mes actual a mostrar (limitada a 200 filas
+  //   por rendimiento de UI — NO se usa para calcular totales, ver abajo)
+  // - los TOTALES del mes actual, sin límite de filas (monto+metodo+tipo nada más)
+  // - las transacciones del mes anterior (para la comparación), sin límite
+  // - los traspasos del mes actual
+  // - el saldo histórico acumulado por método, agregado en la base de datos
+  const [resLista, resTotalesActual, resAnterior, resTransf, saldosHistoricos] = await Promise.all([
+    supabase
+      .from("transacciones")
+      .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+      .gte("fecha", rangoActual.inicio)
+      .lt("fecha", rangoActual.finExclusivo)
+      .order("fecha", { ascending: false })
+      .order("creado_en", { ascending: false })
+      .limit(200),
+    supabase
+      .from("transacciones")
+      .select("monto, metodo_pago, categoria:categorias(tipo)")
+      .gte("fecha", rangoActual.inicio)
+      .lt("fecha", rangoActual.finExclusivo),
+    supabase
+      .from("transacciones")
+      .select("monto, metodo_pago, categoria:categorias(tipo)")
+      .gte("fecha", rangoAnterior.inicio)
+      .lt("fecha", rangoAnterior.finExclusivo),
+    supabase
+      .from("transferencias")
+      .select("*")
+      .gte("fecha", rangoActual.inicio)
+      .lt("fecha", rangoActual.finExclusivo)
+      .order("fecha", { ascending: false }),
+    calcularSaldosHistoricos(supabase, rangoActual.inicio),
+  ]);
 
-  try {
-    // Cargamos transacciones del mes actual y anterior, traspasos del mes
-    // actual, y el saldo histórico por método, todo en paralelo.
-    const [resAct, resAnt, resTransf, saldosHist] = await Promise.all([
-      supabase
-        .from("transacciones")
-        .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-        .gte("fecha", rangoActual.inicio)
-        .lt("fecha", rangoActual.finExclusivo)
-        .order("fecha", { ascending: false })
-        .order("creado_en", { ascending: false })
-        // Safety net: límite de 200 transacciones por mes
-        .limit(200),
-      supabase
-        .from("transacciones")
-        .select("monto, metodo_pago, categoria:categorias(tipo)")
-        .gte("fecha", rangoAnterior.inicio)
-        .lt("fecha", rangoAnterior.finExclusivo),
-      supabase
-        .from("transferencias")
-        .select("*")
-        .gte("fecha", rangoActual.inicio)
-        .lt("fecha", rangoActual.finExclusivo)
-        .order("fecha", { ascending: false }),
-      // Saldo histórico (total y por método) usando query de agregación
-      calcularSaldosHistoricos(supabase, rangoActual.inicio),
-    ]);
-
-    if (resAct.error && resAct.error.message.includes("metodo_pago")) {
-      // Reintento seguro sin la columna metodo_pago
-      const [resAct2, resAnt2] = await Promise.all([
-        supabase
-          .from("transacciones")
-          .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-          .gte("fecha", rangoActual.inicio)
-          .lt("fecha", rangoActual.finExclusivo)
-          .order("fecha", { ascending: false })
-          .order("creado_en", { ascending: false })
-          .limit(200),
-        supabase
-          .from("transacciones")
-          .select("monto, categoria:categorias(tipo)")
-          .gte("fecha", rangoAnterior.inicio)
-          .lt("fecha", rangoAnterior.finExclusivo),
-      ]);
-      resActualData = (resAct2.data ?? []) as unknown[];
-      resAnteriorData = (resAnt2.data ?? []) as unknown[];
-    } else {
-      resActualData = (resAct.data ?? []) as unknown[];
-      resAnteriorData = (resAnt.data ?? []) as unknown[];
-    }
-
-    // La tabla transferencias es nueva: puede no existir todavía (migración pendiente).
-    transferenciasActualData = resTransf.error ? [] : (resTransf.data ?? []);
-
-    saldosHistoricos = saldosHist;
-  } catch (err) {
-    console.error("Error obteniendo balance mensual:", err);
+  if (resLista.error) {
+    throw new Error(`No se pudieron cargar las transacciones del mes: ${resLista.error.message}`);
+  }
+  if (resTotalesActual.error) {
+    throw new Error(`No se pudieron calcular los totales del mes: ${resTotalesActual.error.message}`);
+  }
+  if (resAnterior.error) {
+    throw new Error(`No se pudo cargar el mes anterior: ${resAnterior.error.message}`);
+  }
+  if (resTransf.error) {
+    throw new Error(`No se pudieron cargar los traspasos: ${resTransf.error.message}`);
   }
 
-  const transaccionesActual = resActualData as unknown as TransaccionConCategoria[];
-  const transferenciasActual = transferenciasActualData as unknown as Transferencia[];
+  const transaccionesActual = (resLista.data ?? []) as unknown as TransaccionConCategoria[];
+  const transferenciasActual = (resTransf.data ?? []) as unknown as Transferencia[];
 
-  const totalesActual = calcularTotalesDetallados(transaccionesActual);
+  const totalesActual = calcularTotalesDetallados(
+    resTotalesActual.data as unknown as {
+      monto: number;
+      metodo_pago?: MetodoPago;
+      categoria: { tipo: TipoCategoria } | null;
+    }[],
+  );
   aplicarTransferencias(totalesActual, transferenciasActual);
 
   const totalesAnterior = calcularTotalesDetallados(
-    resAnteriorData as unknown as {
+    resAnterior.data as unknown as {
       monto: number;
       metodo_pago?: MetodoPago;
       categoria: { tipo: TipoCategoria } | null;
@@ -560,39 +475,38 @@ export async function obtenerPresupuestosConGasto(
   const mesActualISO = primerDiaDelMes(anio, mes);
   const rango = rangoDelMes(anio, mes);
 
-  try {
-    const [resCategorias, resPresupuestos, resTransacciones] = await Promise.all([
-      supabase.from("categorias").select("*").eq("tipo", "egreso").order("nombre"),
-      supabase.from("presupuestos").select("*").eq("mes", mesActualISO),
-      supabase
-        .from("transacciones")
-        .select("categoria_id, monto")
-        .gte("fecha", rango.inicio)
-        .lt("fecha", rango.finExclusivo),
-    ]);
+  const [resCategorias, resPresupuestos, resTransacciones] = await Promise.all([
+    supabase.from("categorias").select("*").eq("tipo", "egreso").order("nombre"),
+    supabase.from("presupuestos").select("*").eq("mes", mesActualISO),
+    supabase
+      .from("transacciones")
+      .select("categoria_id, monto")
+      .gte("fecha", rango.inicio)
+      .lt("fecha", rango.finExclusivo),
+  ]);
 
-    const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
-    const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
-    const transacciones = (resTransacciones.data ?? []) as Pick<
-      Transaccion,
-      "categoria_id" | "monto"
-    >[];
+  if (resCategorias.error) throw new Error(resCategorias.error.message);
+  if (resPresupuestos.error) throw new Error(resPresupuestos.error.message);
+  if (resTransacciones.error) throw new Error(resTransacciones.error.message);
 
-    const gastoPorCategoria = new Map<string, number>();
-    for (const t of transacciones) {
-      gastoPorCategoria.set(t.categoria_id, (gastoPorCategoria.get(t.categoria_id) ?? 0) + t.monto);
-    }
-    const presupuestoPorCategoria = new Map(presupuestos.map((p) => [p.categoria_id, p]));
+  const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
+  const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
+  const transacciones = (resTransacciones.data ?? []) as Pick<
+    Transaccion,
+    "categoria_id" | "monto"
+  >[];
 
-    return categoriasEgreso.map((categoria) => ({
-      categoria,
-      presupuesto: presupuestoPorCategoria.get(categoria.id) ?? null,
-      gastado: gastoPorCategoria.get(categoria.id) ?? 0,
-    }));
-  } catch (err) {
-    console.error("Error obteniendo presupuestos con gasto:", err);
-    return [];
+  const gastoPorCategoria = new Map<string, number>();
+  for (const t of transacciones) {
+    gastoPorCategoria.set(t.categoria_id, (gastoPorCategoria.get(t.categoria_id) ?? 0) + t.monto);
   }
+  const presupuestoPorCategoria = new Map(presupuestos.map((p) => [p.categoria_id, p]));
+
+  return categoriasEgreso.map((categoria) => ({
+    categoria,
+    presupuesto: presupuestoPorCategoria.get(categoria.id) ?? null,
+    gastado: gastoPorCategoria.get(categoria.id) ?? 0,
+  }));
 }
 
 export async function guardarPresupuesto(
@@ -651,7 +565,7 @@ export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) throw new Error("No autenticado.");
 
   const { data, error } = await supabase
     .from("gastos_recurrentes")
@@ -659,10 +573,7 @@ export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
     .eq("user_id", user.id)
     .order("dia_cobro");
 
-  if (error) {
-    console.error("Error obteniendo gastos recurrentes:", error);
-    return [];
-  }
+  if (error) throw new Error(`No se pudieron cargar los gastos recurrentes: ${error.message}`);
 
   return (data ?? []) as unknown as GastoRecurrente[];
 }

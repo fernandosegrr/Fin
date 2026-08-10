@@ -57,6 +57,18 @@ export function rangoDelMes(
   };
 }
 
+/**
+ * Días transcurridos de `anio`/`mes` para promediar gasto diario: si es el mes
+ * en curso, el día de hoy (en México); si ya cerró (o es futuro), el total de
+ * días de ese mes — no tiene sentido dividir entre "hoy" cuando se está
+ * viendo un mes distinto al actual.
+ */
+export function diasTranscurridosEnMes(anio: number, mes: number): number {
+  const hoy = hoyEnMexico();
+  if (anio === hoy.anio && mes === hoy.mes) return hoy.dia;
+  return new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+}
+
 const FORMATO_NOMBRE_MES = new Intl.DateTimeFormat("es-MX", {
   month: "long",
   year: "numeric",

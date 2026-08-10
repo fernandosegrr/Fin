@@ -3,14 +3,17 @@
 import { Calendar, PieChart, Receipt, Activity } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { formatearMonto } from "@/lib/format";
+import { diasTranscurridosEnMes } from "@/lib/dates";
 import type { TransaccionConCategoria } from "@/lib/types";
 
 interface Props {
   transacciones: TransaccionConCategoria[];
   totalEgresos: number;
+  anio: number;
+  mes: number;
 }
 
-export function AnalyticsSummary({ transacciones, totalEgresos }: Props) {
+export function AnalyticsSummary({ transacciones, totalEgresos, anio, mes }: Props) {
   // Calculo de gastos Fijos vs Variables
   let egresosFijos = 0;
   let egresosVariables = 0;
@@ -22,9 +25,11 @@ export function AnalyticsSummary({ transacciones, totalEgresos }: Props) {
     }
   }
 
-  // Promedio diario (asumiendo días transcurridos)
-  const hoyDia = new Date().getDate();
-  const promedioDiario = totalEgresos > 0 ? Math.round(totalEgresos / Math.max(1, hoyDia)) : 0;
+  // Promedio diario: días transcurridos DEL MES QUE SE ESTÁ VIENDO, no de hoy
+  // (si no, ver enero muestra el gasto total de enero dividido entre el día
+  // de hoy en agosto).
+  const diasTranscurridos = diasTranscurridosEnMes(anio, mes);
+  const promedioDiario = totalEgresos > 0 ? Math.round(totalEgresos / Math.max(1, diasTranscurridos)) : 0;
 
   // Categoria de mayor gasto
   const gastoPorCat = new Map<string, { nombre: string; monto: number }>();

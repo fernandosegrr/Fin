@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { X, Plus, Trash2, Tag, Layers } from "lucide-react";
 import { crearCategoria, eliminarCategoria } from "@/app/dashboard/actions";
 import { GlowButton } from "@/components/react-bits/GlowButton";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { Categoria, GrupoCategoria, TipoCategoria } from "@/lib/types";
 
 interface Props {
@@ -20,6 +21,8 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
   
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useEscapeKey(abierto, onCerrar);
 
   if (!abierto) return null;
 
@@ -65,12 +68,22 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCerrar();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-gestion-categorias"
+        className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div>
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <h2 id="titulo-gestion-categorias" className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <Layers className="h-5 w-5 text-indigo-400" />
               Gestión de Categorías
             </h2>
@@ -81,6 +94,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
           <button
             type="button"
             onClick={onCerrar}
+            aria-label="Cerrar"
             className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
           >
             <X className="h-5 w-5" />

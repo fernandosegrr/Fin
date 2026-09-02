@@ -13,6 +13,8 @@ import { CategoryManagerModal } from "./category-manager-modal";
 
 interface Props {
   initialTransacciones: TransaccionConCategoria[];
+  /** Total real de movimientos del mes en la BD (puede ser mayor a `initialTransacciones.length`, que está limitado a 200). */
+  totalTransacciones: number;
   categorias: Categoria[];
   onTransaccionCambiada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
@@ -21,7 +23,12 @@ type TransaccionOptimista = TransaccionConCategoria & { pendiente?: boolean };
 
 let contadorOptimista = 0;
 
-export function TransactionsSection({ initialTransacciones, categorias, onTransaccionCambiada }: Props) {
+export function TransactionsSection({
+  initialTransacciones,
+  totalTransacciones,
+  categorias,
+  onTransaccionCambiada,
+}: Props) {
   const [modalCapturaAbierto, setModalCapturaAbierto] = useState(false);
   const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
   const [transaccionAEditar, setTransaccionAEditar] = useState<TransaccionConCategoria | null>(null);
@@ -291,6 +298,13 @@ export function TransactionsSection({ initialTransacciones, categorias, onTransa
           {errorEnvio && (
             <p className="mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
               {errorEnvio}
+            </p>
+          )}
+
+          {totalTransacciones > transacciones.length && (
+            <p className="mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-400">
+              Mostrando los {transacciones.length} movimientos más recientes de {totalTransacciones} este mes. Usa
+              &quot;Exportar CSV&quot; para ver el mes completo.
             </p>
           )}
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition, useCallback } from "react";
 import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { AsesorChat } from "@/components/asesor-chat";
 import { BalanceResumen } from "@/components/balance-resumen";
 import { AnalyticsSummary } from "@/components/analytics-summary";
 import { FinancialCharts } from "@/components/financial-charts";
@@ -54,6 +55,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   // resultado de una solicitud más reciente que ya resolvió.
   const solicitudIdRef = useRef(0);
 
+  // Agrupa recargas que llegan casi juntas (p. ej. una mutación local que
+  // llama a recargarDatos() Y el evento Realtime del mismo INSERT que esa
+  // mutación acaba de generar, que llega ~100-200ms después) en una sola
+  // solicitud de red, en vez de repetir el mismo Promise.all de 3 consultas
+  // dos veces seguidas por cada acción del usuario.
+  const recargaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Recarga silenciosa en tiempo real (invocada por WebSockets, Server Actions
   // locales, o al recuperar el foco/conexión)
   const recargarDatos = useCallback((mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => {
@@ -65,32 +73,55 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       });
     }
 
-    const idSolicitud = ++solicitudIdRef.current;
+    if (recargaTimeoutRef.current) clearTimeout(recargaTimeoutRef.current);
+    recargaTimeoutRef.current = setTimeout(() => {
+      const idSolicitud = ++solicitudIdRef.current;
 
-    startTransition(async () => {
-      try {
-        const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
-          obtenerBalanceMensual(anio, mes),
-          obtenerPresupuestosConGasto(anio, mes),
-          obtenerGastosRecurrentes(),
-        ]);
-        if (solicitudIdRef.current !== idSolicitud) return;
-        setBalance(nuevoBalance);
-        setPresupuestos(nuevosPresupuestos);
-        setGastosRecurrentes(nuevosRecurrentes);
-      } catch (err) {
-        if (solicitudIdRef.current !== idSolicitud) return;
-        console.error("Error recargando datos del dashboard:", err);
-        setToast({
-          id: String(Date.now()),
-          texto: "No se pudieron actualizar los datos. Los que ves en pantalla podrían no ser los más recientes.",
-          tipo: "error",
-        });
-      }
-    });
+      startTransition(async () => {
+        try {
+          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
+            obtenerBalanceMensual(anio, mes),
+            obtenerPresupuestosConGasto(anio, mes),
+            obtenerGastosRecurrentes(),
+          ]);
+          if (solicitudIdRef.current !== idSolicitud) return;
+          setBalance(nuevoBalance);
+          setPresupuestos(nuevosPresupuestos);
+          setGastosRecurrentes(nuevosRecurrentes);
+        } catch (err) {
+          if (solicitudIdRef.current !== idSolicitud) return;
+          console.error("Error recargando datos del dashboard:", err);
+          setToast({
+            id: String(Date.now()),
+            texto: "No se pudieron actualizar los datos. Los que ves en pantalla podrían no ser los más recientes.",
+            tipo: "error",
+          });
+        }
+      });
+    }, 300);
   }, [anio, mes]);
 
+  useEffect(() => {
+    return () => {
+      if (recargaTimeoutRef.current) clearTimeout(recargaTimeoutRef.current);
+    };
+  }, []);
+
+  // Siempre apunta a la versión más reciente de recargarDatos (con el
+  // anio/mes vigente). El canal de Realtime de abajo la usa a través de esta
+  // ref en vez de tenerla como dependencia directa, para poder suscribirse
+  // una sola vez por sesión sin importar cuántas veces cambie el mes.
+  const recargarDatosRef = useRef(recargarDatos);
+  useEffect(() => {
+    recargarDatosRef.current = recargarDatos;
+  }, [recargarDatos]);
+
   // SUSCRIPCIÓN EN TIEMPO REAL VÍA SUPABASE WEBSOCKETS ⚡
+  // A propósito NO depende de [anio, mes]: el filtro por user_id no cambia
+  // con el mes que se está viendo, así que recrear el canal en cada cambio
+  // de mes solo tiraba la conexión WebSocket y forzaba un nuevo handshake de
+  // reconexión (se sentía como lentitud notoria al usar "mes siguiente/
+  // anterior"). Ahora se suscribe una sola vez por sesión del componente.
   useEffect(() => {
     const supabase = createClient();
     let canal: ReturnType<typeof supabase.channel> | null = null;
@@ -104,11 +135,11 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       const filtro = `user_id=eq.${session.user.id}`;
 
       canal = supabase
-        .channel(`realtime_dashboard_${anio}_${mes}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
+        .channel(`realtime_dashboard_${session.user.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatosRef.current())
+        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatosRef.current())
+        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatosRef.current())
+        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatosRef.current())
         .subscribe((status) => {
           const conectado = status === "SUBSCRIBED";
           setConexionEnVivo(conectado);
@@ -116,7 +147,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           // y se reconecta, pudimos perder eventos mientras estuvo caído:
           // refrescamos para no quedarnos con datos desfasados.
           if (conectado && !estabaConectado) {
-            recargarDatos();
+            recargarDatosRef.current();
           }
           estabaConectado = conectado;
         });
@@ -127,7 +158,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       setConexionEnVivo(false);
       if (canal) supabase.removeChannel(canal);
     };
-  }, [anio, mes, recargarDatos]);
+  }, []);
 
   // Refrescar al recuperar visibilidad/foco o reconectar a internet. La app
   // es una PWA sin Service Worker: si se manda a segundo plano (o el celular
@@ -181,34 +212,38 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     });
   }
 
-  function registrarGastoRecurrente(datos: {
+  // Async y devuelve la promesa (no se envuelve en startTransition: eso ya
+  // lo hace recargarDatos internamente) para que RecurringExpenses pueda
+  // esperar a que termine y deshabilitar sus botones de "Pagar" mientras
+  // tanto — sin eso, un doble clic alcanzaba a disparar dos cobros reales
+  // antes de que la UI reflejara que ya se había registrado el primero.
+  async function registrarGastoRecurrente(datos: {
     categoria_id: string;
     monto: number;
     descripcion: string;
     metodo_pago: MetodoPago;
     gasto_recurrente_id: string;
   }) {
-    startTransition(async () => {
-      try {
-        await crearTransaccion({
-          categoria_id: datos.categoria_id,
-          monto: datos.monto,
-          descripcion: datos.descripcion,
-          metodo_pago: datos.metodo_pago,
-          gasto_recurrente_id: datos.gasto_recurrente_id,
-        });
-        recargarDatos({
-          texto: `¡Cobro de ${datos.descripcion} registrado con éxito! ⚡`,
-          tipo: "success",
-        });
-      } catch (err) {
-        setToast({
-          id: String(Date.now()),
-          texto: err instanceof Error ? err.message : "Error registrando cobro.",
-          tipo: "error",
-        });
-      }
-    });
+    try {
+      await crearTransaccion({
+        categoria_id: datos.categoria_id,
+        monto: datos.monto,
+        descripcion: datos.descripcion,
+        metodo_pago: datos.metodo_pago,
+        gasto_recurrente_id: datos.gasto_recurrente_id,
+      });
+      recargarDatos({
+        texto: `¡Cobro de ${datos.descripcion} registrado con éxito! ⚡`,
+        tipo: "success",
+      });
+    } catch (err) {
+      setToast({
+        id: String(Date.now()),
+        texto: err instanceof Error ? err.message : "Error registrando cobro.",
+        tipo: "error",
+      });
+      throw err;
+    }
   }
 
   const mesISO = primerDiaDelMes(anio, mes);
@@ -256,10 +291,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <ExportButton
-            transacciones={balance.actual.transacciones}
-            nombreMes={balance.actual.nombreMes}
-          />
+          <ExportButton anio={anio} mes={mes} nombreMes={balance.actual.nombreMes} />
           <form action={signOut}>
             <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión">
               <LogOut className="h-4 w-4 text-slate-400 hover:text-rose-400" />
@@ -294,6 +326,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             <TransactionsSection
               key={`${anio}-${mes}`}
               initialTransacciones={balance.actual.transacciones}
+              totalTransacciones={balance.actual.totalTransaccionesMes}
               categorias={categorias}
               onTransaccionCambiada={recargarDatos}
             />
@@ -333,6 +366,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         {tabActiva === "presupuestos" && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
+          </div>
+        )}
+
+        {/* Pestaña 5: ASESOR (Chat con IA + memoria persistente) */}
+        {tabActiva === "asesor" && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <AsesorChat />
           </div>
         )}
       </div>

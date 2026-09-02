@@ -336,8 +336,38 @@ async function calcularSaldosHistoricos(
 }
 
 export interface BalanceMensual {
-  actual: ResumenMes & { nombreMes: string; transacciones: TransaccionConCategoria[] };
+  actual: ResumenMes & {
+    nombreMes: string;
+    transacciones: TransaccionConCategoria[];
+    /** Total real de movimientos del mes (puede ser mayor que `transacciones.length` si se alcanzó el límite de 200). */
+    totalTransaccionesMes: number;
+  };
   anterior: ResumenMes & { nombreMes: string };
+}
+
+/**
+ * Todas las transacciones del mes, SIN el límite de 200 filas de
+ * `obtenerBalanceMensual` (esa limita por rendimiento de la vista principal).
+ * Se usa solo bajo demanda para exportar a CSV, donde sí importa traer el
+ * mes completo.
+ */
+export async function obtenerTransaccionesCompletasDelMes(
+  anio: number,
+  mes: number,
+): Promise<TransaccionConCategoria[]> {
+  const supabase = await createClient();
+  const rango = rangoDelMes(anio, mes);
+
+  const { data, error } = await supabase
+    .from("transacciones")
+    .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+    .gte("fecha", rango.inicio)
+    .lt("fecha", rango.finExclusivo)
+    .order("fecha", { ascending: false })
+    .order("creado_en", { ascending: false });
+
+  if (error) throw new Error(`No se pudieron cargar las transacciones del mes: ${error.message}`);
+  return (data ?? []) as unknown as TransaccionConCategoria[];
 }
 
 export async function obtenerBalanceMensual(
@@ -363,7 +393,11 @@ export async function obtenerBalanceMensual(
   const [resLista, resTotalesActual, resAnterior, resTransf, saldosHistoricos] = await Promise.all([
     supabase
       .from("transacciones")
-      .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+      // count: "exact" pide a PostgREST el total real de filas que matchean
+      // el filtro (vía header Content-Range) en la MISMA consulta, sin traer
+      // más de las 200 que ya limitábamos — así la UI puede avisar si la
+      // lista mostrada no es todo el mes, en vez de fallar en silencio.
+      .select("*, categoria:categorias(id, nombre, tipo, grupo)", { count: "exact" })
       .gte("fecha", rangoActual.inicio)
       .lt("fecha", rangoActual.finExclusivo)
       .order("fecha", { ascending: false })
@@ -443,6 +477,7 @@ export async function obtenerBalanceMensual(
       },
       transferencias: transferenciasActual,
       transacciones: transaccionesActual,
+      totalTransaccionesMes: resLista.count ?? transaccionesActual.length,
     },
     anterior: {
       anio: anteriorYM.anio,
@@ -562,15 +597,16 @@ export async function guardarPresupuesto(
 
 export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado.");
 
+  // Sin getUser()/`.eq("user_id", ...)` a propósito: es una lectura y RLS ya
+  // filtra por auth.uid() automáticamente (igual que obtenerCategorias/
+  // obtenerBalanceMensual). getUser() hace un round-trip de red aparte a
+  // Supabase Auth — costoso repetirlo en cada lectura cuando esta función
+  // corre en paralelo con otras 3 dentro de un mismo Promise.all (carga
+  // inicial del dashboard) y termina siendo la que más tarda.
   const { data, error } = await supabase
     .from("gastos_recurrentes")
     .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-    .eq("user_id", user.id)
     .order("dia_cobro");
 
   if (error) throw new Error(`No se pudieron cargar los gastos recurrentes: ${error.message}`);

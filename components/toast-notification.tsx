@@ -52,6 +52,7 @@ export function ToastNotification({ toast, onCerrar }: Props) {
       <button
         type="button"
         onClick={onCerrar}
+        aria-label="Cerrar notificación"
         className="ml-2 p-1 text-slate-300 hover:text-white rounded-lg transition-all"
       >
         <X className="h-4 w-4" />

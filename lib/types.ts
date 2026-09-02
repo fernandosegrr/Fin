@@ -96,3 +96,12 @@ export interface FiltrosTransaccion {
   metodoPago: "todos" | MetodoPago;
   categoriaId: string;
 }
+
+export type RolMensajeAsesor = "usuario" | "asistente";
+
+export interface MensajeAsesor {
+  id: string;
+  rol: RolMensajeAsesor;
+  contenido: string;
+  creado_en: string;
+}

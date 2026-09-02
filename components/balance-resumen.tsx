@@ -19,6 +19,7 @@ import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
 import { formatearFechaCorta, hoyISOEnMexico } from "@/lib/dates";
 import { crearTransferencia, type BalanceMensual } from "@/app/dashboard/actions";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { MetodoPago } from "@/lib/types";
 
 interface Props {
@@ -49,6 +50,8 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
   const destino: MetodoPago = origen === "tarjeta" ? "efectivo" : "tarjeta";
+
+  useEscapeKey(modalAbierto, () => setModalAbierto(false));
 
   function abrirModalTransferencia() {
     setMontoTexto("");
@@ -214,16 +217,27 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
     {/* Modal de Traspaso entre métodos de pago */}
     {modalAbierto && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setModalAbierto(false);
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-traspaso"
+          className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden"
+        >
           <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <h3 id="titulo-traspaso" className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <ArrowRightLeft className="h-4 w-4 text-indigo-400" />
               Traspasar entre cuentas
             </h3>
             <button
               type="button"
               onClick={() => setModalAbierto(false)}
+              aria-label="Cerrar"
               className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
             >
               <X className="h-4 w-4" />

@@ -5,6 +5,7 @@ import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote, Calenda
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { CategoryManagerModal } from "./category-manager-modal";
 import { hoyISOEnMexico } from "@/lib/dates";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { Categoria, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
 
 export interface DatosNuevaTransaccion {
@@ -86,6 +87,8 @@ export function TransactionCaptureModal({
     }
   }, [abierto, transaccionEditar, categorias]);
 
+  useEscapeKey(abierto, onCerrar);
+
   if (!abierto) return null;
 
   function manejarEnvio(e: React.FormEvent) {
@@ -124,11 +127,21 @@ export function TransactionCaptureModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onCerrar();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-captura-transaccion"
+          className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden"
+        >
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+            <h2 id="titulo-captura-transaccion" className="text-base font-bold text-slate-100 flex items-center gap-2">
               {esEdicion ? (
                 <>
                   <Pencil className="h-4 w-4 text-indigo-400" />
@@ -144,6 +157,7 @@ export function TransactionCaptureModal({
             <button
               type="button"
               onClick={onCerrar}
+              aria-label="Cerrar"
               className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
             >
               <X className="h-5 w-5" />

@@ -28,8 +28,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Sin userScalable:false ni maximumScale:1: bloquear el pinch-to-zoom
+  // rompe WCAG 1.4.4 (Resize Text) y afecta a quien necesita agrandar texto.
+  maximumScale: 5,
   viewportFit: "cover",
   themeColor: "#070a12",
 };

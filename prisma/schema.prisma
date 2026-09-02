@@ -121,3 +121,34 @@ model Transferencia {
   @@index([userId, fecha(sort: Desc)])
   @@map("transferencias")
 }
+
+model MensajeAsesor {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// Valores válidos: 'usuario' | 'asistente' (CHECK constraint en la BD, no modelado aquí).
+  rol       String
+  contenido String
+  /// Tokens de la llamada a Anthropic que generó este mensaje. Solo se llenan
+  /// en mensajes de rol 'asistente' — visibilidad de costo, no lógica de negocio.
+  tokensEntrada Int?     @map("tokens_entrada")
+  tokensSalida  Int?     @map("tokens_salida")
+  creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@index([userId, creadoEn])
+  @@map("mensajes_asesor")
+}
+
+/// Hechos/preferencias que el Asesor IA decide recordar a largo plazo (vía la
+/// tool guardar_nota_memoria), independiente del historial de mensajes — se
+/// inyectan como lista corta en el system prompt en cada turno, en vez de
+/// reenviar la conversación completa. Sin tabla de "hilos": user_id ya
+/// identifica el hilo completo (uso personal, un solo hilo continuo).
+model NotaMemoriaAsesor {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  contenido String
+  creadoEn  DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@index([userId, creadoEn])
+  @@map("notas_memoria_asesor")
+}

@@ -1,8 +1,8 @@
 "use client";
 
-import { Home, Zap, BarChart3, Target } from "lucide-react";
+import { Home, Zap, BarChart3, Target, Sparkles } from "lucide-react";
 
-export type TabId = "inicio" | "suscripciones" | "estadisticas" | "presupuestos";
+export type TabId = "inicio" | "suscripciones" | "estadisticas" | "presupuestos" | "asesor";
 
 interface Props {
   tabActiva: TabId;
@@ -15,6 +15,7 @@ export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
     { id: "suscripciones" as TabId, label: "Suscripciones", icon: Zap },
     { id: "estadisticas" as TabId, label: "Estadísticas", icon: BarChart3 },
     { id: "presupuestos" as TabId, label: "Presupuestos", icon: Target },
+    { id: "asesor" as TabId, label: "Asesor", icon: Sparkles },
   ];
 
   return (

@@ -5,6 +5,7 @@ import { X, Save, ShieldCheck, Check } from "lucide-react";
 import { guardarPresupuesto } from "@/app/dashboard/actions";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { PresupuestoConGasto } from "@/lib/types";
 
 interface Props {
@@ -29,6 +30,8 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) 
   const [mensajeExito, setMensajeExito] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEscapeKey(abierto, onCerrar);
+
   if (!abierto) return null;
 
   function manejarCambio(categoriaId: string, valor: string) {
@@ -41,13 +44,14 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) 
 
     startTransition(async () => {
       try {
-        for (const item of items) {
-          const valStr = limites[item.categoria.id] ?? "";
-          const num = Number(valStr);
-          const montoLimite = Number.isFinite(num) && num > 0 ? num : 0;
-          
-          await guardarPresupuesto(item.categoria.id, montoLimite, mesISO);
-        }
+        await Promise.all(
+          items.map((item) => {
+            const valStr = limites[item.categoria.id] ?? "";
+            const num = Number(valStr);
+            const montoLimite = Number.isFinite(num) && num > 0 ? num : 0;
+            return guardarPresupuesto(item.categoria.id, montoLimite, mesISO);
+          }),
+        );
         setMensajeExito(true);
         setTimeout(() => {
           setMensajeExito(false);
@@ -60,12 +64,22 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCerrar();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-gestion-presupuestos"
+        className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div>
-            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <h2 id="titulo-gestion-presupuestos" className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-400" />
               Gestión de Presupuestos
             </h2>
@@ -76,6 +90,7 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) 
           <button
             type="button"
             onClick={onCerrar}
+            aria-label="Cerrar"
             className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
           >
             <X className="h-5 w-5" />

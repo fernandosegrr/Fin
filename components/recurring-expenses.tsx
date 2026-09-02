@@ -6,6 +6,7 @@ import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
 import { hoyEnMexico } from "@/lib/dates";
+import { useEscapeKey } from "@/lib/use-escape-key";
 import type { Categoria, GastoRecurrente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
 import {
   crearGastoRecurrente,
@@ -25,7 +26,7 @@ interface Props {
     metodo_pago: MetodoPago;
     gasto_recurrente_id: string;
     tipo: "egreso";
-  }) => void;
+  }) => Promise<void>;
 }
 
 let contadorOptimista = 0;
@@ -44,6 +45,13 @@ export function RecurringExpenses({
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("tarjeta");
   const [isSaving, setIsSaving] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+
+  function cerrarModalProgramar() {
+    setModalAbierto(false);
+    setErrorForm(null);
+  }
+
+  useEscapeKey(modalAbierto, cerrarModalProgramar);
 
   // Derivado de las transacciones reales del mes (no memoria del navegador): sobrevive
   // a cambios de pestaña/refrescos y evita cobrar la misma suscripción dos veces.
@@ -66,6 +74,12 @@ export function RecurringExpenses({
   });
 
   const hoyDia = hoyEnMexico().dia;
+
+  // IDs de gastos recurrentes con un cobro en curso: deshabilita sus botones
+  // de "Pagar" mientras se resuelve, para que un doble clic/doble tap (común
+  // en móvil con red lenta) no alcance a registrar el mismo cobro dos veces
+  // antes de que la UI se entere de que ya se cobró.
+  const [procesando, setProcesando] = useState<Set<string>>(new Set());
 
   async function agregarRecurrente(e: React.FormEvent) {
     e.preventDefault();
@@ -121,16 +135,30 @@ export function RecurringExpenses({
     });
   }
 
-  function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
+  async function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
+    if (procesando.has(rec.id)) return;
+    setProcesando((prev) => new Set(prev).add(rec.id));
+
     const catId = rec.categoria_id || (categorias.find((c) => c.tipo === "egreso")?.id ?? "");
-    onRegistrarTransaccion({
-      categoria_id: catId,
-      monto: rec.monto,
-      descripcion: `Pago recurrente: ${rec.nombre}`,
-      metodo_pago: metodoPagoElegido,
-      gasto_recurrente_id: rec.id,
-      tipo: "egreso",
-    });
+    try {
+      await onRegistrarTransaccion({
+        categoria_id: catId,
+        monto: rec.monto,
+        descripcion: `Pago recurrente: ${rec.nombre}`,
+        metodo_pago: metodoPagoElegido,
+        gasto_recurrente_id: rec.id,
+        tipo: "egreso",
+      });
+    } catch {
+      // El toast de error ya lo muestra el padre (onRegistrarTransaccion);
+      // aquí solo nos interesa liberar el botón en el `finally`.
+    } finally {
+      setProcesando((prev) => {
+        const siguiente = new Set(prev);
+        siguiente.delete(rec.id);
+        return siguiente;
+      });
+    }
   }
 
   const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso");
@@ -179,6 +207,7 @@ export function RecurringExpenses({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
             {recurrentes.map((rec) => {
               const yaCobrado = cobradosEsteMes.has(rec.id);
+              const estaProcesando = procesando.has(rec.id);
               const diasRestantes = rec.dia_cobro - hoyDia;
               const esHoy = rec.dia_cobro === hoyDia;
 
@@ -239,6 +268,10 @@ export function RecurringExpenses({
                       <span className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-500 opacity-50 flex items-center gap-1">
                         <Zap className="h-3.5 w-3.5" /> Cobrado
                       </span>
+                    ) : estaProcesando ? (
+                      <span className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Procesando…
+                      </span>
                     ) : (
                       <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 p-1 rounded-xl">
                         <span className="text-[10px] font-bold text-emerald-400 pl-1 pr-0.5 uppercase tracking-wider hidden sm:inline">
@@ -281,19 +314,27 @@ export function RecurringExpenses({
 
       {/* Modal para agregar Gasto Recurrente */}
       {modalAbierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) cerrarModalProgramar();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-programar-recurrente"
+            className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <h3 id="titulo-programar-recurrente" className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <Clock className="h-4 w-4 text-amber-400" />
                 Programar Gasto Recurrente
               </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setModalAbierto(false);
-                  setErrorForm(null);
-                }}
+                onClick={cerrarModalProgramar}
+                aria-label="Cerrar"
                 className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -409,14 +450,7 @@ export function RecurringExpenses({
               )}
 
               <div className="flex gap-2 pt-1">
-                <GlowButton
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setModalAbierto(false);
-                    setErrorForm(null);
-                  }}
-                >
+                <GlowButton type="button" variant="secondary" onClick={cerrarModalProgramar}>
                   Cancelar
                 </GlowButton>
                 <GlowButton type="submit" variant="primary" disabled={isSaving} className="flex-1">

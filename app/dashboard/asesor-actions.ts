@@ -269,35 +269,6 @@ async function ejecutarGuardarNotaMemoria(
 // ─────────────────────────────────────────────
 
 export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ mensajeAsistente: MensajeAsesor }> {
-  try {
-    return await enviarMensajeAsesorInterno(contenidoCrudo);
-  } catch (err) {
-    // DIAGNÓSTICO TEMPORAL — quitar en cuanto se resuelva el problema en
-    // producción. Relanzar el error (como se hacía antes) siempre se veía
-    // en el cliente como el mensaje genérico y redactado de Server
-    // Components de Next.js, sin importar qué tan amigable fuera el
-    // mensaje real — se probaron dos causas distintas (SDK vs fetch) sin
-    // ningún cambio en el texto mostrado, lo que sugiere que Cloudflare
-    // redacta CUALQUIER excepción lanzada desde una Server Action en este
-    // despliegue. Al regresarlo como dato normal (no lanzado), no hay nada
-    // que redactar: llega intacto al cliente.
-    console.error("Error en enviarMensajeAsesor:", err);
-    const detalle =
-      err instanceof Error
-        ? `${err.name}: ${err.message}${err.stack ? `\n\n${err.stack.slice(0, 800)}` : ""}`
-        : String(err);
-    return {
-      mensajeAsistente: {
-        id: `debug-${Date.now()}`,
-        rol: "asistente",
-        contenido: `[DEBUG] ${detalle}`,
-        creado_en: new Date().toISOString(),
-      },
-    };
-  }
-}
-
-async function enviarMensajeAsesorInterno(contenidoCrudo: string): Promise<{ mensajeAsistente: MensajeAsesor }> {
   const contenido = contenidoCrudo.trim();
   if (!contenido) throw new Error("Escribe un mensaje antes de enviar.");
   if (contenido.length > MAX_CARACTERES_MENSAJE) {

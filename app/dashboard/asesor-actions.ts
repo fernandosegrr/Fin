@@ -261,12 +261,19 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     ),
   ];
 
-  const client = new OpenAI(); // lee OPENAI_API_KEY del entorno automáticamente
   let mensajeFinal: OpenAI.ChatCompletionMessage | null = null;
   let tokensEntrada = 0;
   let tokensSalida = 0;
 
   try {
+    // El constructor va DENTRO del try: si algo en el SDK falla al
+    // instanciarse (p. ej. una incompatibilidad del runtime de Cloudflare
+    // Workers, nunca antes ejercitada en producción porque es el primer
+    // secreto que esta app lee de process.env en tiempo de request en vez
+    // de en build), antes quedaba sin capturar y Next.js lo mostraba como un
+    // error genérico de Server Components sin detalle alguno.
+    const client = new OpenAI(); // lee OPENAI_API_KEY del entorno automáticamente
+
     for (let intento = 0; intento < MAX_ITERACIONES_TOOL; intento++) {
       const response = await client.chat.completions.create({
         model: MODELO_ASESOR,
@@ -311,7 +318,12 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     if (err instanceof OpenAI.APIError) {
       throw new Error("El asesor no pudo responder. Intenta de nuevo en un momento.");
     }
-    throw new Error("No se pudo conectar con el asesor. Revisa tu conexión e intenta de nuevo.");
+    // Caso no anticipado (p. ej. una incompatibilidad de runtime): se anexa
+    // nombre/mensaje real del error al mensaje que ve el cliente. No hay
+    // acceso a los logs del servidor de Cloudflare desde aquí, así que esto
+    // es la única forma práctica de diagnosticar qué fue exactamente.
+    const detalle = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`No se pudo conectar con el asesor (${detalle}).`);
   }
 
   // No basta con `?? fallback`: un modelo de razonamiento sin presupuesto

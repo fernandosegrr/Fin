@@ -122,6 +122,15 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   // de mes solo tiraba la conexión WebSocket y forzaba un nuevo handshake de
   // reconexión (se sentía como lentitud notoria al usar "mes siguiente/
   // anterior"). Ahora se suscribe una sola vez por sesión del componente.
+  //
+  // Este mismo efecto maneja recuperar visibilidad/foco/reconexión a
+  // internet (antes vivía en un efecto aparte): la app es una PWA sin
+  // Service Worker, así que si se manda a segundo plano (o el celular se
+  // bloquea) por un rato, el WebSocket puede quedar en un estado "zombie" —
+  // ni conectado ni reconectando — sin que la librería lo note sola (se
+  // reportó como el indicador quedándose en "Reconectando..." indefinidamente).
+  // Por eso, al recuperar visibilidad, si el canal no quedó SUBSCRIBED, se
+  // resuscribe desde cero en vez de confiar en que se recupere solo.
   useEffect(() => {
     const supabase = createClient();
     let canal: ReturnType<typeof supabase.channel> | null = null;
@@ -130,17 +139,18 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     // "reconexión" (evitaría una recarga redundante justo tras el SSR inicial).
     let estabaConectado = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelado || !session?.user) return;
-      const filtro = `user_id=eq.${session.user.id}`;
+    function suscribir(userId: string) {
+      if (canal) supabase.removeChannel(canal);
+      const filtro = `user_id=eq.${userId}`;
 
       canal = supabase
-        .channel(`realtime_dashboard_${session.user.id}`)
+        .channel(`realtime_dashboard_${userId}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatosRef.current())
         .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatosRef.current())
         .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatosRef.current())
         .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatosRef.current())
         .subscribe((status) => {
+          if (cancelado) return;
           const conectado = status === "SUBSCRIBED";
           setConexionEnVivo(conectado);
           // Si el canal se había caído (celular en background, red inestable)
@@ -151,38 +161,35 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           }
           estabaConectado = conectado;
         });
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelado || !session?.user) return;
+      suscribir(session.user.id);
     });
 
-    return () => {
-      cancelado = true;
-      setConexionEnVivo(false);
-      if (canal) supabase.removeChannel(canal);
-    };
-  }, []);
-
-  // Refrescar al recuperar visibilidad/foco o reconectar a internet. La app
-  // es una PWA sin Service Worker: si se manda a segundo plano (o el celular
-  // se bloquea) por un rato, el sistema operativo suspende la pestaña/WebView
-  // pero React sigue montado con el último estado que tenía — no vuelve a
-  // pedir datos solo. Sin esto, al reabrir se ven cifras de hace horas, y de
-  // paso el canal de Realtime pudo haberse cerrado sin que la reconexión
-  // llegue a dispararse (ver efecto de arriba, que sí cubre ese caso, pero
-  // solo si el canal realmente reintenta la conexión).
-  useEffect(() => {
     function alRecuperarActividad() {
-      if (document.visibilityState === "visible") {
-        recargarDatos();
+      if (cancelado || document.visibilityState !== "visible") return;
+      recargarDatosRef.current();
+      if (!estabaConectado) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!cancelado && session?.user) suscribir(session.user.id);
+        });
       }
     }
     document.addEventListener("visibilitychange", alRecuperarActividad);
     window.addEventListener("focus", alRecuperarActividad);
     window.addEventListener("online", alRecuperarActividad);
+
     return () => {
+      cancelado = true;
+      setConexionEnVivo(false);
       document.removeEventListener("visibilitychange", alRecuperarActividad);
       window.removeEventListener("focus", alRecuperarActividad);
       window.removeEventListener("online", alRecuperarActividad);
+      if (canal) supabase.removeChannel(canal);
     };
-  }, [recargarDatos]);
+  }, []);
 
   function cambiarMes(nuevoAnio: number, nuevoMes: number) {
     setAnio(nuevoAnio);

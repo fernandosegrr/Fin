@@ -68,6 +68,13 @@ export interface DesgloseMetodoPago {
   saldo: number;
 }
 
+/** Gasto acumulado de una categoría dentro de un mes. */
+export interface EgresoPorCategoria {
+  categoria_id: string;
+  nombre: string;
+  monto: number;
+}
+
 /** Resumen de ingresos/egresos/balance de un mes calendario. */
 export interface ResumenMes {
   anio: number;
@@ -81,6 +88,19 @@ export interface ResumenMes {
   totalesTarjeta: DesgloseMetodoPago;
   /** Traspasos entre métodos de pago registrados este mes. */
   transferencias: Transferencia[];
+  // Los tres campos de abajo se agregan en el SERVIDOR sobre TODAS las
+  // transacciones del mes. Antes la UI los recalculaba desde la lista de
+  // `transacciones`, que está limitada a 200 filas por rendimiento: arriba de
+  // ese tope, las gráficas y las métricas contradecían en silencio a los
+  // totales de ingresos/egresos, que sí venían sin límite.
+  /** Egresos del mes de categorías marcadas como "fijo". */
+  egresosFijos: number;
+  /** Egresos del mes de categorías marcadas como "variable". */
+  egresosVariables: number;
+  /** Egresos del mes agrupados por categoría, de mayor a menor. */
+  egresosPorCategoria: EgresoPorCategoria[];
+  /** IDs de gastos recurrentes que ya generaron un cobro en este mes. */
+  recurrentesCobrados: string[];
 }
 
 export interface PresupuestoConGasto {

@@ -15,10 +15,11 @@ import {
 import { PieChart as PieIcon, BarChart3 } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { formatearMonto } from "@/lib/format";
-import type { TransaccionConCategoria } from "@/lib/types";
+import type { EgresoPorCategoria } from "@/lib/types";
 
 interface Props {
-  transacciones: TransaccionConCategoria[];
+  /** Agregado en el servidor sobre TODO el mes y ya ordenado de mayor a menor. */
+  egresosPorCategoria: EgresoPorCategoria[];
   ingresosTotales: number;
   egresosTotales: number;
 }
@@ -34,21 +35,10 @@ const PALETTE = [
   "#10b981", // emerald
 ];
 
-export function FinancialCharts({ transacciones, ingresosTotales, egresosTotales }: Props) {
+export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosTotales }: Props) {
   const [activeTab, setActiveTab] = useState<"pie" | "bar">("pie");
 
-  // Agrupar egresos por categoría
-  const egresosPorCategoriaMap = new Map<string, number>();
-  for (const t of transacciones) {
-    if (t.categoria?.tipo === "egreso") {
-      const nombre = t.categoria.nombre;
-      egresosPorCategoriaMap.set(nombre, (egresosPorCategoriaMap.get(nombre) ?? 0) + t.monto);
-    }
-  }
-
-  const pieData = Array.from(egresosPorCategoriaMap.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+  const pieData = egresosPorCategoria.map((e) => ({ id: e.categoria_id, name: e.nombre, value: e.monto }));
 
   // Datos para comparativa Flujo de Efectivo
   const barData = [
@@ -146,7 +136,7 @@ export function FinancialCharts({ transacciones, ingresosTotales, egresosTotales
                   const pct = egresosTotales > 0 ? Math.round((entry.value / egresosTotales) * 100) : 0;
                   return (
                     <div
-                      key={entry.name}
+                      key={entry.id}
                       className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-950/40 border border-white/5"
                     >
                       <div className="flex items-center gap-2 truncate">

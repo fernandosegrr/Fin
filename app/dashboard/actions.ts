@@ -13,6 +13,7 @@ import {
 } from "@/lib/dates";
 import type {
   Categoria,
+  EgresoPorCategoria,
   GastoRecurrente,
   GrupoCategoria,
   MetodoPago,
@@ -246,23 +247,48 @@ export async function crearTransferencia(input: NuevaTransferencia): Promise<voi
 // BALANCE MENSUAL
 // ─────────────────────────────────────────────
 
+/** Fila mínima para agregar totales: es lo que seleccionan las consultas SIN límite de filas. */
+type FilaParaTotales = {
+  monto: number;
+  metodo_pago?: MetodoPago;
+  gasto_recurrente_id?: string | null;
+  categoria: { id: string; nombre: string; tipo: TipoCategoria; grupo: GrupoCategoria | null } | null;
+};
+
+const SELECT_TOTALES = "monto, metodo_pago, gasto_recurrente_id, categoria:categorias(id, nombre, tipo, grupo)";
+
 type TotalesCalculados = {
   ingresos: number;
   egresos: number;
   efectivo: { ingresos: number; egresos: number; neto: number };
   tarjeta: { ingresos: number; egresos: number; neto: number };
+  egresosFijos: number;
+  egresosVariables: number;
+  egresosPorCategoria: EgresoPorCategoria[];
+  recurrentesCobrados: string[];
 };
 
-function calcularTotalesDetallados(
-  filas: { monto: number; metodo_pago?: MetodoPago; categoria: { tipo: TipoCategoria } | null }[],
-): TotalesCalculados {
+/**
+ * Agrega TODO lo que la UI necesita del mes en una sola pasada sobre las filas
+ * sin límite. Los desgloses por categoría / fijo-variable / suscripciones
+ * cobradas viven aquí y no en los componentes a propósito: en el cliente solo
+ * está disponible la lista recortada a 200 filas, así que calcularlos allá
+ * daba números que no cuadraban con los totales en meses con mucho movimiento.
+ */
+function calcularTotalesDetallados(filas: FilaParaTotales[]): TotalesCalculados {
   let ingresos = 0;
   let egresos = 0;
+  let egresosFijos = 0;
+  let egresosVariables = 0;
 
   const efectivo = { ingresos: 0, egresos: 0, neto: 0 };
   const tarjeta = { ingresos: 0, egresos: 0, neto: 0 };
+  const porCategoria = new Map<string, EgresoPorCategoria>();
+  const recurrentesCobrados = new Set<string>();
 
   for (const fila of filas) {
+    if (fila.gasto_recurrente_id) recurrentesCobrados.add(fila.gasto_recurrente_id);
+
     const esEfectivo = fila.metodo_pago === "efectivo";
     if (fila.categoria?.tipo === "ingreso") {
       ingresos += fila.monto;
@@ -272,13 +298,33 @@ function calcularTotalesDetallados(
       egresos += fila.monto;
       if (esEfectivo) efectivo.egresos += fila.monto;
       else tarjeta.egresos += fila.monto;
+
+      if (fila.categoria.grupo === "fijo") egresosFijos += fila.monto;
+      else if (fila.categoria.grupo === "variable") egresosVariables += fila.monto;
+
+      const acumulado = porCategoria.get(fila.categoria.id);
+      if (acumulado) acumulado.monto += fila.monto;
+      else porCategoria.set(fila.categoria.id, {
+        categoria_id: fila.categoria.id,
+        nombre: fila.categoria.nombre,
+        monto: fila.monto,
+      });
     }
   }
 
   efectivo.neto = efectivo.ingresos - efectivo.egresos;
   tarjeta.neto = tarjeta.ingresos - tarjeta.egresos;
 
-  return { ingresos, egresos, efectivo, tarjeta };
+  return {
+    ingresos,
+    egresos,
+    efectivo,
+    tarjeta,
+    egresosFijos,
+    egresosVariables,
+    egresosPorCategoria: [...porCategoria.values()].sort((a, b) => b.monto - a.monto),
+    recurrentesCobrados: [...recurrentesCobrados],
+  };
 }
 
 /**
@@ -405,12 +451,12 @@ export async function obtenerBalanceMensual(
       .limit(200),
     supabase
       .from("transacciones")
-      .select("monto, metodo_pago, categoria:categorias(tipo)")
+      .select(SELECT_TOTALES)
       .gte("fecha", rangoActual.inicio)
       .lt("fecha", rangoActual.finExclusivo),
     supabase
       .from("transacciones")
-      .select("monto, metodo_pago, categoria:categorias(tipo)")
+      .select(SELECT_TOTALES)
       .gte("fecha", rangoAnterior.inicio)
       .lt("fecha", rangoAnterior.finExclusivo),
     supabase
@@ -438,22 +484,10 @@ export async function obtenerBalanceMensual(
   const transaccionesActual = (resLista.data ?? []) as unknown as TransaccionConCategoria[];
   const transferenciasActual = (resTransf.data ?? []) as unknown as Transferencia[];
 
-  const totalesActual = calcularTotalesDetallados(
-    resTotalesActual.data as unknown as {
-      monto: number;
-      metodo_pago?: MetodoPago;
-      categoria: { tipo: TipoCategoria } | null;
-    }[],
-  );
+  const totalesActual = calcularTotalesDetallados(resTotalesActual.data as unknown as FilaParaTotales[]);
   aplicarTransferencias(totalesActual, transferenciasActual);
 
-  const totalesAnterior = calcularTotalesDetallados(
-    resAnterior.data as unknown as {
-      monto: number;
-      metodo_pago?: MetodoPago;
-      categoria: { tipo: TipoCategoria } | null;
-    }[],
-  );
+  const totalesAnterior = calcularTotalesDetallados(resAnterior.data as unknown as FilaParaTotales[]);
 
   const balanceNetoActual = totalesActual.ingresos - totalesActual.egresos;
 
@@ -476,6 +510,10 @@ export async function obtenerBalanceMensual(
         saldo: saldosHistoricos.tarjeta + totalesActual.tarjeta.neto,
       },
       transferencias: transferenciasActual,
+      egresosFijos: totalesActual.egresosFijos,
+      egresosVariables: totalesActual.egresosVariables,
+      egresosPorCategoria: totalesActual.egresosPorCategoria,
+      recurrentesCobrados: totalesActual.recurrentesCobrados,
       transacciones: transaccionesActual,
       totalTransaccionesMes: resLista.count ?? transaccionesActual.length,
     },
@@ -491,6 +529,10 @@ export async function obtenerBalanceMensual(
       totalesEfectivo: { ...totalesAnterior.efectivo, saldo: totalesAnterior.efectivo.neto },
       totalesTarjeta: { ...totalesAnterior.tarjeta, saldo: totalesAnterior.tarjeta.neto },
       transferencias: [],
+      egresosFijos: totalesAnterior.egresosFijos,
+      egresosVariables: totalesAnterior.egresosVariables,
+      egresosPorCategoria: totalesAnterior.egresosPorCategoria,
+      recurrentesCobrados: totalesAnterior.recurrentesCobrados,
     },
   };
 }

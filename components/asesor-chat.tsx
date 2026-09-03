@@ -3,12 +3,20 @@
 import { startTransition, useEffect, useMemo, useOptimistic, useRef, useState } from "react";
 import { Bot, Loader2, Send, Sparkles } from "lucide-react";
 import { enviarMensajeAsesor, obtenerHistorialAsesor } from "@/app/dashboard/asesor-actions";
+import { capitalizarPrimeraLetra } from "@/lib/format";
+import { nombreDelMes } from "@/lib/dates";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import type { MensajeAsesor } from "@/lib/types";
 
 type MensajeUI = MensajeAsesor & { pendiente?: boolean; esError?: boolean };
 
-export function AsesorChat() {
+interface Props {
+  /** Mes que el usuario tiene abierto en el dashboard: el asesor razona sobre ESE mes, no sobre el de hoy. */
+  anio: number;
+  mes: number;
+}
+
+export function AsesorChat({ anio, mes }: Props) {
   const [mensajes, setMensajes] = useState<MensajeUI[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -45,8 +53,10 @@ export function AsesorChat() {
     setCargando(true);
     setErrorCarga(null);
     obtenerHistorialAsesor()
-      .then((historial) => {
-        if (!cancelado) setMensajes(historial);
+      .then((resultado) => {
+        if (cancelado) return;
+        if (resultado.ok) setMensajes(resultado.mensajes);
+        else setErrorCarga(resultado.error);
       })
       .catch((err) => {
         if (!cancelado) setErrorCarga(err instanceof Error ? err.message : "No se pudo cargar el historial.");
@@ -59,8 +69,11 @@ export function AsesorChat() {
     };
   }, [intentoCarga]);
 
+  // `block: "nearest"` desplaza solo el contenedor del chat lo mínimo
+  // necesario. Sin eso, scrollIntoView() arrastra TODA la página hasta el
+  // final del chat cada vez que se carga el historial o llega un mensaje.
   useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth" });
+    finRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [mensajesUnicos.length]);
 
   function enviarMensaje() {
@@ -88,25 +101,29 @@ export function AsesorChat() {
       agregarMensajeOptimista({ id: "pensando", rol: "asistente", contenido: "", creado_en: "", pendiente: true });
     });
 
-    enviarMensajeAsesor(contenidoEnviar)
-      .then(({ mensajeAsistente }) => {
-        setMensajes((prev) => [...prev, mensajeUsuario, mensajeAsistente]);
+    // El mensaje del usuario ya se guardó en la BD (la Server Action lo
+    // inserta antes de llamar al modelo) — en caso de error se conserva en la
+    // lista junto con un mensaje de error local (no persiste) para reintentar.
+    const mostrarError = (texto: string) =>
+      setMensajes((prev) => [
+        ...prev,
+        mensajeUsuario,
+        {
+          id: `error-${Date.now()}`,
+          rol: "asistente",
+          contenido: texto,
+          creado_en: new Date().toISOString(),
+          esError: true,
+        },
+      ]);
+
+    enviarMensajeAsesor(contenidoEnviar, anio, mes)
+      .then((resultado) => {
+        if (resultado.ok) setMensajes((prev) => [...prev, mensajeUsuario, resultado.mensajeAsistente]);
+        else mostrarError(resultado.error);
       })
       .catch((err: unknown) => {
-        // El mensaje del usuario ya se guardó en la BD (la Server Action lo
-        // inserta antes de llamar al modelo) — se conserva en la lista junto
-        // con un mensaje de error local (no persiste) para poder reintentar.
-        setMensajes((prev) => [
-          ...prev,
-          mensajeUsuario,
-          {
-            id: `error-${Date.now()}`,
-            rol: "asistente",
-            contenido: err instanceof Error ? err.message : "No se pudo obtener respuesta.",
-            creado_en: new Date().toISOString(),
-            esError: true,
-          },
-        ]);
+        mostrarError(err instanceof Error ? err.message : "No se pudo obtener respuesta.");
       })
       .finally(() => {
         setEnviando(false);
@@ -133,7 +150,10 @@ export function AsesorChat() {
           <Bot className="h-5 w-5 text-emerald-400" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-slate-100">Asesor IA</h2>
+          <h2 className="text-sm font-bold text-slate-100">
+            Asesor IA{" "}
+            <span className="font-medium text-slate-500">· {capitalizarPrimeraLetra(nombreDelMes(anio, mes))}</span>
+          </h2>
           <p className="text-[11px] text-slate-500">
             No es un asesor financiero licenciado — sugerencias generales basadas en tus datos.
           </p>
@@ -167,7 +187,7 @@ export function AsesorChat() {
             <Sparkles className="h-8 w-8 text-slate-700 mx-auto mb-2" />
             <p className="text-xs text-slate-500 max-w-xs mx-auto">
               Cuéntame sobre tu situación financiera o pregúntame algo — puedo ver tus ingresos, gastos, presupuestos y
-              suscripciones de este mes.
+              suscripciones de {nombreDelMes(anio, mes)}.
             </p>
           </div>
         )}
@@ -208,7 +228,9 @@ export function AsesorChat() {
             onKeyDown={manejarTeclaTextarea}
             placeholder="Escribe tu mensaje..."
             rows={1}
-            disabled={enviando}
+            // readOnly en vez de disabled: `disabled` quita el foco del
+            // textarea y en móvil eso cierra el teclado en cada envío.
+            readOnly={enviando}
             className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none resize-none"
           />
         </div>

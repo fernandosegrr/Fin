@@ -4,10 +4,10 @@ import { startTransition, useMemo, useOptimistic, useState } from "react";
 import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2 } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto } from "@/lib/format";
-import { hoyEnMexico } from "@/lib/dates";
+import { capitalizarPrimeraLetra, formatearMonto } from "@/lib/format";
+import { hoyEnMexico, hoyISOEnMexico, nombreDelMes } from "@/lib/dates";
 import { useEscapeKey } from "@/lib/use-escape-key";
-import type { Categoria, GastoRecurrente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
+import type { Categoria, GastoRecurrente, MetodoPago } from "@/lib/types";
 import {
   crearGastoRecurrente,
   eliminarGastoRecurrente,
@@ -17,14 +17,24 @@ interface Props {
   categorias: Categoria[];
   /** Gastos recurrentes iniciales cargados desde Supabase (SSR) */
   initialGastosRecurrentes: GastoRecurrente[];
-  /** Transacciones del mes en curso: se usan para saber qué ya se cobró (viene de la BD, no de memoria). */
-  transaccionesDelMes: Pick<TransaccionConCategoria, "gasto_recurrente_id">[];
+  /**
+   * IDs de suscripciones ya cobradas en el mes que se está viendo. Se agrega
+   * en el servidor sobre TODAS las transacciones del mes: derivarlo aquí de
+   * la lista recortada a 200 filas hacía que en un mes con mucho movimiento
+   * una suscripción ya pagada volviera a aparecer como pendiente — y volver a
+   * cobrarla duplicaba el gasto.
+   */
+  recurrentesCobrados: string[];
+  /** Mes que se está viendo (1-12) y su año: el cobro se registra DENTRO de ese mes. */
+  anio: number;
+  mes: number;
   onRegistrarTransaccion: (datos: {
     categoria_id: string;
     monto: number;
     descripcion: string;
     metodo_pago: MetodoPago;
     gasto_recurrente_id: string;
+    fecha: string;
     tipo: "egreso";
   }) => Promise<void>;
 }
@@ -34,7 +44,9 @@ let contadorOptimista = 0;
 export function RecurringExpenses({
   categorias,
   initialGastosRecurrentes,
-  transaccionesDelMes,
+  recurrentesCobrados,
+  anio,
+  mes,
   onRegistrarTransaccion,
 }: Props) {
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -55,13 +67,11 @@ export function RecurringExpenses({
 
   // Derivado de las transacciones reales del mes (no memoria del navegador): sobrevive
   // a cambios de pestaña/refrescos y evita cobrar la misma suscripción dos veces.
-  const cobradosEsteMes = useMemo(() => {
-    const ids = new Set<string>();
-    for (const t of transaccionesDelMes) {
-      if (t.gasto_recurrente_id) ids.add(t.gasto_recurrente_id);
-    }
-    return ids;
-  }, [transaccionesDelMes]);
+  const cobradosEsteMes = useMemo(() => new Set(recurrentesCobrados), [recurrentesCobrados]);
+
+  const hoy = hoyEnMexico();
+  const esMesEnCurso = anio === hoy.anio && mes === hoy.mes;
+  const nombreMesVisto = capitalizarPrimeraLetra(nombreDelMes(anio, mes));
 
   // Optimistic UI para eliminaciones y creaciones
   const [recurrentes, setRecurrentesOptimista] = useOptimistic<
@@ -73,7 +83,7 @@ export function RecurringExpenses({
     return estado;
   });
 
-  const hoyDia = hoyEnMexico().dia;
+  const hoyDia = hoy.dia;
 
   // IDs de gastos recurrentes con un cobro en curso: deshabilita sus botones
   // de "Pagar" mientras se resuelve, para que un doble clic/doble tap (común
@@ -135,6 +145,19 @@ export function RecurringExpenses({
     });
   }
 
+  /**
+   * Fecha con la que se registra un cobro: si se está viendo el mes en curso,
+   * hoy; si es otro mes, el día de cobro de la suscripción dentro de ESE mes
+   * (recortado al último día real, para que un cobro "día 31" no se salga de
+   * un mes de 30).
+   */
+  function fechaDeCobroEnMesVisto(diaCobro: number): string {
+    if (esMesEnCurso) return hoyISOEnMexico();
+    const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+    const dia = Math.min(Math.max(1, diaCobro), ultimoDia);
+    return `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  }
+
   async function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
     if (procesando.has(rec.id)) return;
     setProcesando((prev) => new Set(prev).add(rec.id));
@@ -147,6 +170,11 @@ export function RecurringExpenses({
         descripcion: `Pago recurrente: ${rec.nombre}`,
         metodo_pago: metodoPagoElegido,
         gasto_recurrente_id: rec.id,
+        // El cobro se fecha DENTRO del mes que se está viendo. Antes siempre
+        // usaba la fecha de hoy: cobrar una suscripción desde un mes pasado
+        // metía el gasto en el mes actual y la tarjeta "ya cobrada" nunca se
+        // marcaba en el mes donde se había hecho clic.
+        fecha: fechaDeCobroEnMesVisto(rec.dia_cobro),
         tipo: "egreso",
       });
     } catch {
@@ -176,8 +204,8 @@ export function RecurringExpenses({
                 Suscripciones y Gastos Recurrentes
               </h2>
               <p className="text-[10px] text-slate-400 mt-0.5">
-                Sincronizados en la nube · {recurrentes.length} programado
-                {recurrentes.length !== 1 ? "s" : ""}
+                {recurrentes.length} programado{recurrentes.length !== 1 ? "s" : ""} · cobros de{" "}
+                <span className="font-semibold text-slate-300">{nombreMesVisto}</span>
               </p>
             </div>
           </div>
@@ -245,7 +273,14 @@ export function RecurringExpenses({
                     <div className="mt-1.5">
                       {yaCobrado ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Registrado este mes
+                          <CheckCircle2 className="h-3 w-3" /> Registrado en {nombreMesVisto}
+                        </span>
+                      ) : !esMesEnCurso ? (
+                        // "Se cobra HOY" / "Próximo en N días" solo tienen
+                        // sentido en el mes en curso: en cualquier otro mes se
+                        // comparaba el día de cobro contra el día de HOY.
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          Sin registrar en {nombreMesVisto}
                         </span>
                       ) : esHoy ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 animate-pulse">

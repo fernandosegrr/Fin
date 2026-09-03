@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { X, Save, ShieldCheck, Check } from "lucide-react";
 import { guardarPresupuesto } from "@/app/dashboard/actions";
 import { GlowButton } from "@/components/react-bits/GlowButton";
@@ -15,20 +15,35 @@ interface Props {
   mesISO: string;
 }
 
-export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) {
-  const [limites, setLimites] = useState<Record<string, string>>(() => {
-    const mapa: Record<string, string> = {};
-    items.forEach((item) => {
-      mapa[item.categoria.id] = item.presupuesto?.monto_limite
-        ? String(item.presupuesto.monto_limite)
-        : "";
-    });
-    return mapa;
+function limitesDesdeItems(items: PresupuestoConGasto[]): Record<string, string> {
+  const mapa: Record<string, string> = {};
+  items.forEach((item) => {
+    mapa[item.categoria.id] = item.presupuesto?.monto_limite
+      ? String(item.presupuesto.monto_limite)
+      : "";
   });
+  return mapa;
+}
+
+export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) {
+  const [limites, setLimites] = useState<Record<string, string>>(() => limitesDesdeItems(items));
 
   const [isPending, startTransition] = useTransition();
   const [mensajeExito, setMensajeExito] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // El `useState(inicializador)` de arriba solo corre en el primer montaje, y
+  // este modal nunca se desmonta (el `return null` de abajo va después de los
+  // hooks). Sin esto, al cambiar de mes y volver a abrir "Ajustar Límites" se
+  // seguían viendo los límites del PRIMER mes cargado — y "Guardar Cambios"
+  // los escribía sobre el mes nuevo. Se resincroniza al abrir y al cambiar de
+  // mes; mientras está abierto no se toca, para no borrar lo que se escribe.
+  useEffect(() => {
+    if (abierto) setLimites(limitesDesdeItems(items));
+    // `items` a propósito fuera de las dependencias: cambia de identidad en
+    // cada recarga en vivo y reescribiría el formulario mientras se teclea.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto, mesISO]);
 
   useEscapeKey(abierto, onCerrar);
 

@@ -4,54 +4,34 @@ import { Calendar, PieChart, Receipt, Activity } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { formatearMonto } from "@/lib/format";
 import { diasTranscurridosEnMes } from "@/lib/dates";
-import type { TransaccionConCategoria } from "@/lib/types";
+import type { EgresoPorCategoria } from "@/lib/types";
 
 interface Props {
-  transacciones: TransaccionConCategoria[];
+  /** Ya agregados en el servidor sobre TODO el mes (no sobre la lista recortada a 200 filas). */
+  egresosFijos: number;
+  egresosVariables: number;
+  egresosPorCategoria: EgresoPorCategoria[];
   totalEgresos: number;
   anio: number;
   mes: number;
 }
 
-export function AnalyticsSummary({ transacciones, totalEgresos, anio, mes }: Props) {
-  // Calculo de gastos Fijos vs Variables
-  let egresosFijos = 0;
-  let egresosVariables = 0;
-
-  for (const t of transacciones) {
-    if (t.categoria?.tipo === "egreso") {
-      if (t.categoria.grupo === "fijo") egresosFijos += t.monto;
-      else if (t.categoria.grupo === "variable") egresosVariables += t.monto;
-    }
-  }
-
+export function AnalyticsSummary({
+  egresosFijos,
+  egresosVariables,
+  egresosPorCategoria,
+  totalEgresos,
+  anio,
+  mes,
+}: Props) {
   // Promedio diario: días transcurridos DEL MES QUE SE ESTÁ VIENDO, no de hoy
   // (si no, ver enero muestra el gasto total de enero dividido entre el día
   // de hoy en agosto).
   const diasTranscurridos = diasTranscurridosEnMes(anio, mes);
   const promedioDiario = totalEgresos > 0 ? Math.round(totalEgresos / Math.max(1, diasTranscurridos)) : 0;
 
-  // Categoria de mayor gasto
-  const gastoPorCat = new Map<string, { nombre: string; monto: number }>();
-  for (const t of transacciones) {
-    if (t.categoria?.tipo === "egreso") {
-      const actual = gastoPorCat.get(t.categoria_id) ?? {
-        nombre: t.categoria.nombre,
-        monto: 0,
-      };
-      gastoPorCat.set(t.categoria_id, {
-        nombre: t.categoria.nombre,
-        monto: actual.monto + t.monto,
-      });
-    }
-  }
-
-  let topCategoria = { nombre: "Sin egresos", monto: 0 };
-  for (const item of gastoPorCat.values()) {
-    if (item.monto > topCategoria.monto) {
-      topCategoria = item;
-    }
-  }
+  // `egresosPorCategoria` ya llega ordenado de mayor a menor desde el servidor.
+  const topCategoria = egresosPorCategoria[0] ?? { nombre: "Sin egresos", monto: 0 };
 
   const porcentajeFijo = totalEgresos > 0 ? Math.round((egresosFijos / totalEgresos) * 100) : 0;
   const porcentajeVariable = totalEgresos > 0 ? Math.round((egresosVariables / totalEgresos) * 100) : 0;

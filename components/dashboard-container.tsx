@@ -49,6 +49,12 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
 
   // Notificaciones Toast
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  // Identidad estable: ToastNotification tiene el temporizador de auto-cierre
+  // en un efecto que depende de esta función. Pasada en línea (`() =>
+  // setToast(null)`) cambiaba en cada render del dashboard, reiniciando la
+  // cuenta de 3.5 s una y otra vez — con Realtime activo el toast se quedaba
+  // pegado mucho más tiempo del previsto.
+  const cerrarToast = useCallback(() => setToast(null), []);
 
   // Evita que una respuesta vieja (p. ej. una recarga disparada por Realtime
   // justo antes de cambiar de mes) sobreescriba con datos obsoletos el
@@ -62,8 +68,31 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   // dos veces seguidas por cada acción del usuario.
   const recargaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // El mes vigente leído por REF, no por closure. Antes recargarDatos era un
+  // useCallback con deps [anio, mes], así que la función agendada en el
+  // setTimeout de la recarga se quedaba con el mes que estaba vigente cuando
+  // se agendó. Eso rompía el cambio de mes de forma muy visible:
+  //   1. el navegador dispara `focus`/`visibilitychange` (pasa SIEMPRE al
+  //      volver a la app, y también al primer clic tras recuperar el foco)
+  //      → se agenda una recarga del mes M para dentro de 300 ms;
+  //   2. el usuario toca "mes siguiente" → cambiarMes pide M+1;
+  //   3. a los 300 ms se dispara la recarga vieja, pide M y —al ser más
+  //      reciente— invalida la respuesta de M+1 con solicitudIdRef;
+  //   4. resultado: el encabezado dice M+1 pero los datos son los de M.
+  // Con la ref, cualquier recarga en vuelo apunta siempre al mes actual.
+  const mesVistaRef = useRef({ anio, mes });
+  mesVistaRef.current = { anio, mes };
+
+  const cancelarRecargaPendiente = useCallback(() => {
+    if (recargaTimeoutRef.current) {
+      clearTimeout(recargaTimeoutRef.current);
+      recargaTimeoutRef.current = null;
+    }
+  }, []);
+
   // Recarga silenciosa en tiempo real (invocada por WebSockets, Server Actions
-  // locales, o al recuperar el foco/conexión)
+  // locales, o al recuperar el foco/conexión). Identidad estable: no depende
+  // de [anio, mes], así que no se recrea en cada cambio de mes.
   const recargarDatos = useCallback((mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => {
     if (mensajeToast) {
       setToast({
@@ -73,15 +102,17 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       });
     }
 
-    if (recargaTimeoutRef.current) clearTimeout(recargaTimeoutRef.current);
+    cancelarRecargaPendiente();
     recargaTimeoutRef.current = setTimeout(() => {
+      recargaTimeoutRef.current = null;
       const idSolicitud = ++solicitudIdRef.current;
+      const { anio: anioActual, mes: mesActual } = mesVistaRef.current;
 
       startTransition(async () => {
         try {
           const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
-            obtenerBalanceMensual(anio, mes),
-            obtenerPresupuestosConGasto(anio, mes),
+            obtenerBalanceMensual(anioActual, mesActual),
+            obtenerPresupuestosConGasto(anioActual, mesActual),
             obtenerGastosRecurrentes(),
           ]);
           if (solicitudIdRef.current !== idSolicitud) return;
@@ -99,22 +130,9 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         }
       });
     }, 300);
-  }, [anio, mes]);
+  }, [cancelarRecargaPendiente]);
 
-  useEffect(() => {
-    return () => {
-      if (recargaTimeoutRef.current) clearTimeout(recargaTimeoutRef.current);
-    };
-  }, []);
-
-  // Siempre apunta a la versión más reciente de recargarDatos (con el
-  // anio/mes vigente). El canal de Realtime de abajo la usa a través de esta
-  // ref en vez de tenerla como dependencia directa, para poder suscribirse
-  // una sola vez por sesión sin importar cuántas veces cambie el mes.
-  const recargarDatosRef = useRef(recargarDatos);
-  useEffect(() => {
-    recargarDatosRef.current = recargarDatos;
-  }, [recargarDatos]);
+  useEffect(() => cancelarRecargaPendiente, [cancelarRecargaPendiente]);
 
   // SUSCRIPCIÓN EN TIEMPO REAL VÍA SUPABASE WEBSOCKETS ⚡
   // A propósito NO depende de [anio, mes]: el filtro por user_id no cambia
@@ -145,10 +163,10 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
 
       canal = supabase
         .channel(`realtime_dashboard_${userId}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatosRef.current())
-        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatosRef.current())
-        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatosRef.current())
-        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatosRef.current())
+        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
         .subscribe((status) => {
           if (cancelado) return;
           const conectado = status === "SUBSCRIBED";
@@ -157,7 +175,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           // y se reconecta, pudimos perder eventos mientras estuvo caído:
           // refrescamos para no quedarnos con datos desfasados.
           if (conectado && !estabaConectado) {
-            recargarDatosRef.current();
+            recargarDatos();
           }
           estabaConectado = conectado;
         });
@@ -170,7 +188,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
 
     function alRecuperarActividad() {
       if (cancelado || document.visibilityState !== "visible") return;
-      recargarDatosRef.current();
+      recargarDatos();
       if (!estabaConectado) {
         supabase.auth.getSession().then(({ data: { session } }) => {
           if (!cancelado && session?.user) suscribir(session.user.id);
@@ -189,11 +207,21 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
       window.removeEventListener("online", alRecuperarActividad);
       if (canal) supabase.removeChannel(canal);
     };
-  }, []);
+    // recargarDatos tiene identidad estable (no depende de anio/mes), así que
+    // este efecto sigue corriendo una sola vez por sesión del componente.
+  }, [recargarDatos]);
 
   function cambiarMes(nuevoAnio: number, nuevoMes: number) {
+    if (nuevoAnio === anio && nuevoMes === mes) return;
+
     setAnio(nuevoAnio);
     setMes(nuevoMes);
+    mesVistaRef.current = { anio: nuevoAnio, mes: nuevoMes };
+
+    // Cualquier recarga que quedó agendada (foco recuperado, evento Realtime,
+    // una mutación reciente) apuntaba al mes anterior: se cancela aquí para
+    // que no pise la petición de este mes al resolver después.
+    cancelarRecargaPendiente();
 
     const idSolicitud = ++solicitudIdRef.current;
 
@@ -230,6 +258,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     descripcion: string;
     metodo_pago: MetodoPago;
     gasto_recurrente_id: string;
+    fecha: string;
   }) {
     try {
       await crearTransaccion({
@@ -238,6 +267,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         descripcion: datos.descripcion,
         metodo_pago: datos.metodo_pago,
         gasto_recurrente_id: datos.gasto_recurrente_id,
+        fecha: datos.fecha,
       });
       recargarDatos({
         texto: `¡Cobro de ${datos.descripcion} registrado con éxito! ⚡`,
@@ -258,7 +288,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
   return (
     <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-24 px-3 sm:px-6 bg-[#070a12] relative">
       {/* Toast Banner Flotante con animación */}
-      <ToastNotification toast={toast} onCerrar={() => setToast(null)} />
+      <ToastNotification toast={toast} onCerrar={cerrarToast} />
 
       {/* Top Navbar responsiva */}
       <header
@@ -298,7 +328,14 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <ExportButton anio={anio} mes={mes} nombreMes={balance.actual.nombreMes} />
+          {/* Los tres valores salen del mismo balance cargado: así el archivo
+              exportado nunca lleva el nombre de un mes y el contenido de otro
+              durante los milisegundos en que se está cambiando de mes. */}
+          <ExportButton
+            anio={balance.actual.anio}
+            mes={balance.actual.mes}
+            nombreMes={balance.actual.nombreMes}
+          />
           <form action={signOut}>
             <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión">
               <LogOut className="h-4 w-4 text-slate-400 hover:text-rose-400" />
@@ -331,7 +368,12 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
               onTransferenciaRealizada={recargarDatos}
             />
             <TransactionsSection
-              key={`${anio}-${mes}`}
+              // Se llavea con el mes YA CARGADO, no con el solicitado: entre
+              // el clic y la respuesta del servidor, `anio`/`mes` ya cambiaron
+              // pero `balance` todavía es del mes anterior, así que llavear
+              // con el solicitado remontaba la lista sembrándola con los
+              // movimientos del mes viejo (parpadeo de datos equivocados).
+              key={`${balance.actual.anio}-${balance.actual.mes}`}
               initialTransacciones={balance.actual.transacciones}
               totalTransacciones={balance.actual.totalTransaccionesMes}
               categorias={categorias}
@@ -346,7 +388,9 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             <RecurringExpenses
               categorias={categorias}
               initialGastosRecurrentes={gastosRecurrentes}
-              transaccionesDelMes={balance.actual.transacciones}
+              recurrentesCobrados={balance.actual.recurrentesCobrados}
+              anio={balance.actual.anio}
+              mes={balance.actual.mes}
               onRegistrarTransaccion={registrarGastoRecurrente}
             />
           </div>
@@ -356,13 +400,15 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         {tabActiva === "estadisticas" && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <AnalyticsSummary
-              transacciones={balance.actual.transacciones}
+              egresosFijos={balance.actual.egresosFijos}
+              egresosVariables={balance.actual.egresosVariables}
+              egresosPorCategoria={balance.actual.egresosPorCategoria}
               totalEgresos={balance.actual.egresos}
-              anio={anio}
-              mes={mes}
+              anio={balance.actual.anio}
+              mes={balance.actual.mes}
             />
             <FinancialCharts
-              transacciones={balance.actual.transacciones}
+              egresosPorCategoria={balance.actual.egresosPorCategoria}
               ingresosTotales={balance.actual.ingresos}
               egresosTotales={balance.actual.egresos}
             />
@@ -379,7 +425,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         {/* Pestaña 5: ASESOR (Chat con IA + memoria persistente) */}
         {tabActiva === "asesor" && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <AsesorChat />
+            <AsesorChat anio={balance.actual.anio} mes={balance.actual.mes} />
           </div>
         )}
       </div>

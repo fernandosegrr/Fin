@@ -128,7 +128,7 @@ model MensajeAsesor {
   /// Valores válidos: 'usuario' | 'asistente' (CHECK constraint en la BD, no modelado aquí).
   rol       String
   contenido String
-  /// Tokens de la llamada a Anthropic que generó este mensaje. Solo se llenan
+  /// Tokens de la llamada a OpenAI que generó este mensaje. Solo se llenan
   /// en mensajes de rol 'asistente' — visibilidad de costo, no lógica de negocio.
   tokensEntrada Int?     @map("tokens_entrada")
   tokensSalida  Int?     @map("tokens_salida")

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { capitalizarPrimeraLetra, formatearMonto } from "@/lib/format";
-import { hoyEnMexico, mesAnterior, nombreDelMes, primerDiaDelMes } from "@/lib/dates";
+import { hoyEnMexico, mesAnterior, mesSiguiente, nombreDelMes, primerDiaDelMes } from "@/lib/dates";
 import {
   obtenerBalanceMensual,
   obtenerGastosRecurrentes,
@@ -18,12 +18,17 @@ import type { GastoRecurrente, MensajeAsesor, PresupuestoConGasto, TipoCategoria
 // cada mensaje, así que cada tope de aquí acota un costo real, no es solo
 // una buena práctica genérica.
 
-const MODELO_ASESOR = "gpt-5-nano-2025-08-07"; // el modelo de chat generalmente disponible más barato de OpenAI ($0.05/M tokens de entrada) — verificado contra platform.openai.com/docs/pricing, no adivinado
-// gpt-5-nano es un modelo "de razonamiento": sin acotar esto, puede gastar
-// TODO max_completion_tokens en razonamiento invisible y devolver contenido
-// vacío (nos pasó en la primera prueba). "minimal" lo mantiene rápido/barato
-// y deja presupuesto real para la respuesta visible.
-const ESFUERZO_RAZONAMIENTO = "minimal";
+// Sustituye a gpt-5-nano-2025-08-07, que se retira el 2026-12-11. Es el nano
+// vigente y sigue siendo de los más baratos del catálogo.
+const MODELO_ASESOR = "gpt-5.4-nano";
+// OJO: esta familia YA NO acepta "minimal" (la API responde 400: «does not
+// support 'minimal' with this model. Supported values are: 'none', 'low',
+// 'medium', 'high', 'xhigh'»). "none" es el equivalente: verificado contra la
+// API real, devuelve reasoning_tokens = 0 y aun así llama correctamente a
+// guardar_nota_memoria. Sin acotar esto, un modelo de razonamiento puede
+// gastar TODO max_completion_tokens en razonamiento invisible y devolver
+// contenido vacío.
+const ESFUERZO_RAZONAMIENTO = "none";
 const MAX_TOKENS_RESPUESTA = 2048; // el system prompt pide respuestas cortas; acota el costo de salida en el peor caso (con margen para razonamiento mínimo)
 const MAX_ITERACIONES_TOOL = 3; // tope duro al bucle de tool calls — nunca debería necesitar más de 1-2 con una sola tool
 const MENSAJES_CONTEXTO_MODELO = 24; // ~12 turnos usuario/asistente reenviados al modelo — acota el costo de un hilo que crece indefinidamente
@@ -32,26 +37,60 @@ const MAX_CARACTERES_MENSAJE = 4000; // guardarraíl: evita que un mensaje gigan
 const MAX_NOTAS_MEMORIA = 50;
 const MESES_TENDENCIA = 4;
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
+// Sin timeout, una petición colgada a OpenAI se lleva TODO el presupuesto de
+// tiempo de la función serverless y el usuario acaba viendo el error genérico
+// de la plataforma en vez de algo accionable. 45 s deja margen de sobra para
+// gpt-5-nano con reasoning "minimal" (responde en 2-6 s típicamente).
+const TIMEOUT_OPENAI_MS = 45_000;
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// ─────────────────────────────────────────────
+// RESULTADOS (nunca se lanzan excepciones al cliente)
+// ─────────────────────────────────────────────
+// Next.js REDACTA en producción el mensaje de cualquier excepción que salga
+// de una Server Action: al cliente solo le llega "An error occurred in the
+// Server Components render… omitted in production builds" más un digest.
+// Eso fue exactamente lo que hizo invisible el problema del OPENAI_API_KEY
+// (ver commits bd33a28 / 0d51cb5): dos causas distintas producían el mismo
+// texto genérico. Devolver el error como DATO (no lanzarlo) es lo único que
+// hace que estos mensajes en español lleguen intactos al usuario en prod.
+export type ResultadoHistorialAsesor =
+  | { ok: true; mensajes: MensajeAsesor[] }
+  | { ok: false; error: string };
+
+export type ResultadoMensajeAsesor =
+  | { ok: true; mensajeAsistente: MensajeAsesor }
+  | { ok: false; error: string };
+
+function textoDeError(err: unknown, porDefecto: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === "string" && err) return err;
+  return porDefecto;
+}
 
 // ─────────────────────────────────────────────
 // LECTURA
 // ─────────────────────────────────────────────
 
-export async function obtenerHistorialAsesor(): Promise<MensajeAsesor[]> {
-  const supabase = await createClient();
+export async function obtenerHistorialAsesor(): Promise<ResultadoHistorialAsesor> {
+  try {
+    const supabase = await createClient();
 
-  // Sin getUser(): lectura, RLS ya filtra por auth.uid() (mismo criterio que
-  // obtenerCategorias/obtenerGastosRecurrentes en actions.ts).
-  const { data, error } = await supabase
-    .from("mensajes_asesor")
-    .select("id, rol, contenido, creado_en")
-    .order("creado_en", { ascending: false })
-    .limit(MENSAJES_HISTORIAL_UI);
+    // Sin getUser(): lectura, RLS ya filtra por auth.uid() (mismo criterio que
+    // obtenerCategorias/obtenerGastosRecurrentes en actions.ts).
+    const { data, error } = await supabase
+      .from("mensajes_asesor")
+      .select("id, rol, contenido, creado_en")
+      .order("creado_en", { ascending: false })
+      .limit(MENSAJES_HISTORIAL_UI);
 
-  if (error) throw new Error(`No se pudo cargar el historial del asesor: ${error.message}`);
-  return ((data ?? []) as MensajeAsesor[]).reverse();
+    if (error) return { ok: false, error: `No se pudo cargar el historial del asesor: ${error.message}` };
+    return { ok: true, mensajes: ((data ?? []) as MensajeAsesor[]).reverse() };
+  } catch (err) {
+    console.error("Error cargando el historial del asesor:", err);
+    return { ok: false, error: textoDeError(err, "No se pudo cargar el historial del asesor.") };
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -64,20 +103,49 @@ interface PuntoTendenciaMensual {
   egresos: number;
 }
 
-async function obtenerTendenciaMensual(supabase: SupabaseServerClient): Promise<PuntoTendenciaMensual[]> {
-  let { anio, mes } = hoyEnMexico();
+type FilaTendencia = { monto: number; fecha: string; categoria: { tipo: TipoCategoria } | null };
+
+/**
+ * Últimos `MESES_TENDENCIA` meses TERMINANDO en el mes que el usuario tiene
+ * en pantalla (no en el mes de hoy): si está viendo julio, la tendencia que
+ * ve el asesor es abr-jul, no jun-sep.
+ */
+async function obtenerTendenciaMensual(
+  supabase: SupabaseServerClient,
+  anioFin: number,
+  mesFin: number,
+): Promise<PuntoTendenciaMensual[]> {
+  let anio = anioFin;
+  let mes = mesFin;
   for (let i = 0; i < MESES_TENDENCIA - 1; i++) ({ anio, mes } = mesAnterior(anio, mes));
   const inicio = primerDiaDelMes(anio, mes);
+  const siguienteAlFin = mesSiguiente(anioFin, mesFin);
+  const finExclusivo = primerDiaDelMes(siguienteAlFin.anio, siguienteAlFin.mes);
 
-  const { data, error } = await supabase
-    .from("transacciones")
-    .select("monto, fecha, categoria:categorias(tipo)")
-    .gte("fecha", inicio);
+  // Paginado explícito: PostgREST corta cualquier consulta en 1000 filas por
+  // defecto (max-rows) SIN avisar, así que una consulta suelta podía dejar
+  // fuera meses enteros y el asesor razonaba sobre una tendencia incompleta
+  // creyéndola completa. Con 4 meses de datos normalmente es una sola vuelta.
+  const TAM_PAGINA = 1000;
+  const filas: FilaTendencia[] = [];
+  for (let desde = 0; ; desde += TAM_PAGINA) {
+    const { data, error } = await supabase
+      .from("transacciones")
+      .select("monto, fecha, categoria:categorias(tipo)")
+      .gte("fecha", inicio)
+      .lt("fecha", finExclusivo)
+      .order("fecha", { ascending: true })
+      .range(desde, desde + TAM_PAGINA - 1);
 
-  if (error) throw new Error(`No se pudo calcular la tendencia mensual: ${error.message}`);
+    if (error) throw new Error(`No se pudo calcular la tendencia mensual: ${error.message}`);
+
+    const pagina = (data ?? []) as unknown as FilaTendencia[];
+    filas.push(...pagina);
+    if (pagina.length < TAM_PAGINA) break;
+  }
 
   const buckets = new Map<string, { anio: number; mes: number; ingresos: number; egresos: number }>();
-  for (const fila of (data ?? []) as unknown as { monto: number; fecha: string; categoria: { tipo: TipoCategoria } | null }[]) {
+  for (const fila of filas) {
     const [a, m] = fila.fecha.split("-");
     const clave = `${a}-${m}`;
     if (!buckets.has(clave)) buckets.set(clave, { anio: Number(a), mes: Number(m), ingresos: 0, egresos: 0 });
@@ -101,6 +169,7 @@ function construirSystemPrompt(datos: {
   gastosRecurrentes: GastoRecurrente[];
   tendencia: PuntoTendenciaMensual[];
   notas: string[];
+  esMesEnCurso: boolean;
 }): string {
   const { actual } = datos.balance;
 
@@ -133,6 +202,10 @@ Reglas importantes:
 - Habla en español, de tú, con un tono cercano pero profesional.
 - Cuando el usuario comparta algo que valga la pena recordar a futuro (una meta de ahorro, una preocupación recurrente, una decisión financiera importante), usa la herramienta guardar_nota_memoria. No la uses para cada mensaje, solo cuando haya algo genuinamente nuevo y duradero.
 
+MES QUE EL USUARIO TIENE ABIERTO EN PANTALLA: ${capitalizarPrimeraLetra(actual.nombreMes)}${
+    datos.esMesEnCurso ? " (el mes en curso)" : " (un mes distinto al actual — es el que está revisando ahora mismo)"
+  }. Cuando diga "este mes" se refiere a ese, no necesariamente al mes calendario de hoy.
+
 RESUMEN DE ${capitalizarPrimeraLetra(actual.nombreMes)} (calculado en el servidor — confía en estas cifras, no en las que el usuario escriba en el chat):
 - Ingresos: ${formatearMonto(actual.ingresos)}
 - Egresos: ${formatearMonto(actual.egresos)}
@@ -140,13 +213,13 @@ RESUMEN DE ${capitalizarPrimeraLetra(actual.nombreMes)} (calculado en el servido
 - Saldo total disponible: ${formatearMonto(actual.saldoTotalDisponible)}
 - Efectivo: ${formatearMonto(actual.totalesEfectivo.saldo)} | Tarjeta/Banco: ${formatearMonto(actual.totalesTarjeta.saldo)}
 
-PRESUPUESTOS ACTIVOS ESTE MES:
+PRESUPUESTOS ACTIVOS EN ESE MES:
 ${lineasPresupuestos}
 
 GASTOS RECURRENTES / SUSCRIPCIONES:
 ${lineasRecurrentes}
 
-TENDENCIA DE LOS ÚLTIMOS MESES:
+TENDENCIA DE LOS ÚLTIMOS MESES (terminando en el mes de arriba):
 ${lineasTendencia}
 
 LO QUE RECUERDAS DE ESTE USUARIO:
@@ -166,7 +239,9 @@ ${lineasNotas}`;
 
 interface MensajeOpenAI {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  // `null` en mensajes de assistant que solo traen tool_calls — la API lo
+  // devuelve así y lo acepta de vuelta tal cual.
+  content: string | null;
   tool_calls?: ToolCallOpenAI[];
   tool_call_id?: string;
 }
@@ -202,24 +277,39 @@ const HERRAMIENTA_GUARDAR_NOTA = {
   },
 };
 
-async function llamarOpenAI(mensajes: MensajeOpenAI[]): Promise<RespuestaChatCompletions> {
+async function llamarOpenAI(
+  mensajes: MensajeOpenAI[],
+  { conHerramientas }: { conHerramientas: boolean },
+): Promise<RespuestaChatCompletions> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("El asesor no está configurado todavía (falta OPENAI_API_KEY en el servidor).");
 
-  const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODELO_ASESOR,
-      max_completion_tokens: MAX_TOKENS_RESPUESTA,
-      reasoning_effort: ESFUERZO_RAZONAMIENTO,
-      tools: [HERRAMIENTA_GUARDAR_NOTA],
-      messages: mensajes,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: MODELO_ASESOR,
+        max_completion_tokens: MAX_TOKENS_RESPUESTA,
+        reasoning_effort: ESFUERZO_RAZONAMIENTO,
+        // En la última iteración permitida se llama SIN herramientas: así el
+        // modelo se ve obligado a cerrar con texto en vez de pedir otra tool
+        // call que ya no se va a ejecutar (eso dejaba la respuesta vacía).
+        ...(conHerramientas ? { tools: [HERRAMIENTA_GUARDAR_NOTA] } : {}),
+        messages: mensajes,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_OPENAI_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error("El asesor tardó demasiado en responder. Intenta de nuevo.");
+    }
+    throw new Error(`No se pudo conectar con el asesor: ${textoDeError(err, "error de red")}`);
+  }
 
   if (!response.ok) {
     let detalle = `HTTP ${response.status}`;
@@ -230,12 +320,16 @@ async function llamarOpenAI(mensajes: MensajeOpenAI[]): Promise<RespuestaChatCom
       // El cuerpo del error no era JSON válido; nos quedamos con el status.
     }
 
-    if (response.status === 401) throw new Error("La clave de API del asesor no es válida. Contacta al administrador.");
-    if (response.status === 429) throw new Error("El asesor está saturado en este momento. Intenta de nuevo en unos minutos.");
+    if (response.status === 401) throw new Error("La clave de API del asesor no es válida. Revisa OPENAI_API_KEY.");
+    if (response.status === 429) throw new Error("El asesor está saturado o se agotó la cuota de OpenAI. Intenta más tarde.");
     throw new Error(`El asesor no pudo responder (${detalle}).`);
   }
 
-  return (await response.json()) as RespuestaChatCompletions;
+  const datos = (await response.json()) as RespuestaChatCompletions;
+  if (!datos.choices || datos.choices.length === 0) {
+    throw new Error("El asesor devolvió una respuesta vacía. Intenta de nuevo.");
+  }
+  return datos;
 }
 
 async function ejecutarGuardarNotaMemoria(
@@ -268,40 +362,68 @@ async function ejecutarGuardarNotaMemoria(
 // ESCRITURA: enviar mensaje y obtener respuesta
 // ─────────────────────────────────────────────
 
-export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ mensajeAsistente: MensajeAsesor }> {
+export async function enviarMensajeAsesor(
+  contenidoCrudo: string,
+  anioVista?: number,
+  mesVista?: number,
+): Promise<ResultadoMensajeAsesor> {
+  try {
+    return await enviarMensajeAsesorInterno(contenidoCrudo, anioVista, mesVista);
+  } catch (err) {
+    // Última red de seguridad: nada debe salir de aquí como excepción, o
+    // Next.js lo redacta en producción y el usuario pierde el detalle real
+    // (ver el comentario de ResultadoMensajeAsesor arriba).
+    console.error("Error en enviarMensajeAsesor:", err);
+    return { ok: false, error: textoDeError(err, "No se pudo obtener respuesta del asesor.") };
+  }
+}
+
+async function enviarMensajeAsesorInterno(
+  contenidoCrudo: string,
+  anioVista?: number,
+  mesVista?: number,
+): Promise<ResultadoMensajeAsesor> {
   const contenido = contenidoCrudo.trim();
-  if (!contenido) throw new Error("Escribe un mensaje antes de enviar.");
+  if (!contenido) return { ok: false, error: "Escribe un mensaje antes de enviar." };
   if (contenido.length > MAX_CARACTERES_MENSAJE) {
-    throw new Error(`Tu mensaje es demasiado largo (máximo ${MAX_CARACTERES_MENSAJE} caracteres).`);
+    return { ok: false, error: `Tu mensaje es demasiado largo (máximo ${MAX_CARACTERES_MENSAJE} caracteres).` };
   }
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("El asesor no está configurado todavía (falta OPENAI_API_KEY en el servidor).");
+    return { ok: false, error: "El asesor no está configurado todavía (falta OPENAI_API_KEY en el servidor)." };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado.");
+  if (!user) return { ok: false, error: "Tu sesión expiró. Vuelve a iniciar sesión." };
+
+  // El asesor razona sobre el mes que el usuario tiene ABIERTO, no sobre el
+  // mes de hoy: si está revisando julio y pregunta "¿cómo voy este mes?",
+  // antes se le contestaba con las cifras de septiembre.
+  const hoy = hoyEnMexico();
+  const anio = anioVista ?? hoy.anio;
+  const mes = mesVista ?? hoy.mes;
+  const esMesEnCurso = anio === hoy.anio && mes === hoy.mes;
 
   // Se guarda ANTES de llamar al modelo: si la llamada a la API falla, el
   // mensaje del usuario no se pierde.
   const { error: errorInsertUsuario } = await supabase
     .from("mensajes_asesor")
     .insert({ user_id: user.id, rol: "usuario", contenido });
-  if (errorInsertUsuario) throw new Error(`No se pudo guardar tu mensaje: ${errorInsertUsuario.message}`);
+  if (errorInsertUsuario) return { ok: false, error: `No se pudo guardar tu mensaje: ${errorInsertUsuario.message}` };
 
   const [balance, presupuestos, gastosRecurrentes, tendencia, resNotas, resHistorial] = await Promise.all([
-    obtenerBalanceMensual(),
-    obtenerPresupuestosConGasto(),
+    obtenerBalanceMensual(anio, mes),
+    obtenerPresupuestosConGasto(anio, mes),
     obtenerGastosRecurrentes(),
-    obtenerTendenciaMensual(supabase),
+    obtenerTendenciaMensual(supabase, anio, mes),
     supabase.from("notas_memoria_asesor").select("contenido").order("creado_en", { ascending: false }).limit(MAX_NOTAS_MEMORIA),
     supabase.from("mensajes_asesor").select("rol, contenido").order("creado_en", { ascending: false }).limit(MENSAJES_CONTEXTO_MODELO),
   ]);
 
-  if (resNotas.error) throw new Error(`No se pudo cargar la memoria del asesor: ${resNotas.error.message}`);
-  if (resHistorial.error) throw new Error(`No se pudo cargar el historial: ${resHistorial.error.message}`);
+  if (resNotas.error) return { ok: false, error: `No se pudo cargar la memoria del asesor: ${resNotas.error.message}` };
+  if (resHistorial.error) return { ok: false, error: `No se pudo cargar el historial: ${resHistorial.error.message}` };
 
   const notas = (resNotas.data ?? []).map((n) => n.contenido as string).reverse();
   const historial = (resHistorial.data ?? []).reverse() as { rol: string; contenido: string }[];
@@ -311,7 +433,14 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
   // asistente) — evita que el primer mensaje de la ventana quede huérfano.
   while (historial.length > 0 && historial[0].rol !== "usuario") historial.shift();
 
-  const systemPrompt = construirSystemPrompt({ balance, presupuestos, gastosRecurrentes, tendencia, notas });
+  const systemPrompt = construirSystemPrompt({
+    balance,
+    presupuestos,
+    gastosRecurrentes,
+    tendencia,
+    notas,
+    esMesEnCurso,
+  });
   let mensajesConversacion: MensajeOpenAI[] = [
     { role: "system", content: systemPrompt },
     ...historial.map((m): MensajeOpenAI => ({ role: m.rol === "usuario" ? "user" : "assistant", content: m.contenido })),
@@ -323,7 +452,8 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
 
   try {
     for (let intento = 0; intento < MAX_ITERACIONES_TOOL; intento++) {
-      const response = await llamarOpenAI(mensajesConversacion);
+      const esUltimaIteracion = intento === MAX_ITERACIONES_TOOL - 1;
+      const response = await llamarOpenAI(mensajesConversacion, { conHerramientas: !esUltimaIteracion });
 
       if (response.usage) {
         tokensEntrada += response.usage.prompt_tokens;
@@ -350,12 +480,9 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     }
   } catch (err) {
     console.error("Error llamando a la API de OpenAI:", err);
-    // Si viene de llamarOpenAI() ya trae un mensaje amigable en español; si
-    // es otra cosa (p. ej. fetch fallando por red), se reenvía tal cual para
-    // no perder el detalle real — no hay acceso a los logs del servidor de
-    // Cloudflare desde aquí.
-    if (err instanceof Error) throw err;
-    throw new Error(`No se pudo conectar con el asesor: ${String(err)}`);
+    // llamarOpenAI() ya normaliza todo a un mensaje en español; se devuelve
+    // como dato (no se lanza) para que llegue íntegro al cliente en prod.
+    return { ok: false, error: textoDeError(err, "No se pudo conectar con el asesor.") };
   }
 
   // No basta con `?? fallback`: un modelo de razonamiento sin presupuesto
@@ -384,6 +511,7 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     // Se regresa igual al cliente: ya se generó y se pagó el costo de la
     // llamada a la API, no tiene sentido perderla por un fallo de guardado.
     return {
+      ok: true,
       mensajeAsistente: {
         id: `temp-${Date.now()}`,
         rol: "asistente",
@@ -393,5 +521,5 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     };
   }
 
-  return { mensajeAsistente: mensajeGuardado as MensajeAsesor };
+  return { ok: true, mensajeAsistente: mensajeGuardado as MensajeAsesor };
 }

@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  /* El destello BLANCO al abrir la PWA salía de aquí: el splash de Android/iOS
+     usa background_color del manifest (#070a12, oscuro), pero en cuanto lo
+     quita, el navegador pinta el lienzo del documento —que es <html>, no
+     <body>— y sin fondo propio eso es blanco. Se veía "negro → blanco → app".
+     Poner el color en <html> (y color-scheme: dark, para que también sean
+     oscuros los scrollbars y el overscroll) elimina el hueco por completo. */
+  html {
+    background-color: #070a12;
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white;
     font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;

@@ -1,6 +1,5 @@
 "use server";
 
-import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
 import { capitalizarPrimeraLetra, formatearMonto } from "@/lib/format";
 import { hoyEnMexico, mesAnterior, nombreDelMes, primerDiaDelMes } from "@/lib/dates";
@@ -32,6 +31,7 @@ const MENSAJES_HISTORIAL_UI = 50; // mensajes pasados cargados al abrir la pesta
 const MAX_CARACTERES_MENSAJE = 4000; // guardarraíl: evita que un mensaje gigante dispare un costo de tokens fuera de control
 const MAX_NOTAS_MEMORIA = 50;
 const MESES_TENDENCIA = 4;
+const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -154,11 +154,36 @@ ${lineasNotas}`;
 }
 
 // ─────────────────────────────────────────────
-// TOOL: guardar_nota_memoria
+// CLIENTE OPENAI VÍA fetch() DIRECTO (sin el SDK oficial)
 // ─────────────────────────────────────────────
+// El SDK `openai` nunca se había probado corriendo de verdad en el runtime
+// de Cloudflare Workers (es la primera integración HTTP saliente de esta
+// app), y algo en su inicialización fallaba en producción sin dejar rastro
+// útil — Next.js lo mostraba como el error genérico de Server Components,
+// igual con o sin try/catch alrededor. fetch() es una primitiva nativa de
+// Workers (no una librería que la envuelve), así que es la superficie de
+// incompatibilidad más chica posible para esta llamada.
 
-const HERRAMIENTA_GUARDAR_NOTA: OpenAI.ChatCompletionTool = {
-  type: "function",
+interface MensajeOpenAI {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  tool_calls?: ToolCallOpenAI[];
+  tool_call_id?: string;
+}
+
+interface ToolCallOpenAI {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+interface RespuestaChatCompletions {
+  choices: { message: MensajeOpenAI; finish_reason: string }[];
+  usage?: { prompt_tokens: number; completion_tokens: number };
+}
+
+const HERRAMIENTA_GUARDAR_NOTA = {
+  type: "function" as const,
   function: {
     name: "guardar_nota_memoria",
     description:
@@ -176,6 +201,42 @@ const HERRAMIENTA_GUARDAR_NOTA: OpenAI.ChatCompletionTool = {
     },
   },
 };
+
+async function llamarOpenAI(mensajes: MensajeOpenAI[]): Promise<RespuestaChatCompletions> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("El asesor no está configurado todavía (falta OPENAI_API_KEY en el servidor).");
+
+  const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODELO_ASESOR,
+      max_completion_tokens: MAX_TOKENS_RESPUESTA,
+      reasoning_effort: ESFUERZO_RAZONAMIENTO,
+      tools: [HERRAMIENTA_GUARDAR_NOTA],
+      messages: mensajes,
+    }),
+  });
+
+  if (!response.ok) {
+    let detalle = `HTTP ${response.status}`;
+    try {
+      const cuerpo = (await response.json()) as { error?: { message?: string } };
+      if (cuerpo.error?.message) detalle = cuerpo.error.message;
+    } catch {
+      // El cuerpo del error no era JSON válido; nos quedamos con el status.
+    }
+
+    if (response.status === 401) throw new Error("La clave de API del asesor no es válida. Contacta al administrador.");
+    if (response.status === 429) throw new Error("El asesor está saturado en este momento. Intenta de nuevo en unos minutos.");
+    throw new Error(`El asesor no pudo responder (${detalle}).`);
+  }
+
+  return (await response.json()) as RespuestaChatCompletions;
+}
 
 async function ejecutarGuardarNotaMemoria(
   supabase: SupabaseServerClient,
@@ -251,37 +312,18 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
   while (historial.length > 0 && historial[0].rol !== "usuario") historial.shift();
 
   const systemPrompt = construirSystemPrompt({ balance, presupuestos, gastosRecurrentes, tendencia, notas });
-  let mensajesConversacion: OpenAI.ChatCompletionMessageParam[] = [
+  let mensajesConversacion: MensajeOpenAI[] = [
     { role: "system", content: systemPrompt },
-    ...historial.map(
-      (m): OpenAI.ChatCompletionMessageParam => ({
-        role: m.rol === "usuario" ? "user" : "assistant",
-        content: m.contenido,
-      }),
-    ),
+    ...historial.map((m): MensajeOpenAI => ({ role: m.rol === "usuario" ? "user" : "assistant", content: m.contenido })),
   ];
 
-  let mensajeFinal: OpenAI.ChatCompletionMessage | null = null;
+  let mensajeFinal: MensajeOpenAI | null = null;
   let tokensEntrada = 0;
   let tokensSalida = 0;
 
   try {
-    // El constructor va DENTRO del try: si algo en el SDK falla al
-    // instanciarse (p. ej. una incompatibilidad del runtime de Cloudflare
-    // Workers, nunca antes ejercitada en producción porque es el primer
-    // secreto que esta app lee de process.env en tiempo de request en vez
-    // de en build), antes quedaba sin capturar y Next.js lo mostraba como un
-    // error genérico de Server Components sin detalle alguno.
-    const client = new OpenAI(); // lee OPENAI_API_KEY del entorno automáticamente
-
     for (let intento = 0; intento < MAX_ITERACIONES_TOOL; intento++) {
-      const response = await client.chat.completions.create({
-        model: MODELO_ASESOR,
-        max_completion_tokens: MAX_TOKENS_RESPUESTA,
-        reasoning_effort: ESFUERZO_RAZONAMIENTO,
-        tools: [HERRAMIENTA_GUARDAR_NOTA],
-        messages: mensajesConversacion,
-      });
+      const response = await llamarOpenAI(mensajesConversacion);
 
       if (response.usage) {
         tokensEntrada += response.usage.prompt_tokens;
@@ -296,7 +338,6 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
       mensajesConversacion = [...mensajesConversacion, mensaje];
 
       for (const llamada of mensaje.tool_calls) {
-        if (llamada.type !== "function") continue;
         const textoResultado =
           llamada.function.name === "guardar_nota_memoria"
             ? await ejecutarGuardarNotaMemoria(supabase, user.id, llamada.function.arguments)
@@ -309,21 +350,12 @@ export async function enviarMensajeAsesor(contenidoCrudo: string): Promise<{ men
     }
   } catch (err) {
     console.error("Error llamando a la API de OpenAI:", err);
-    if (err instanceof OpenAI.AuthenticationError) {
-      throw new Error("La clave de API del asesor no es válida. Contacta al administrador.");
-    }
-    if (err instanceof OpenAI.RateLimitError) {
-      throw new Error("El asesor está saturado en este momento. Intenta de nuevo en unos minutos.");
-    }
-    if (err instanceof OpenAI.APIError) {
-      throw new Error("El asesor no pudo responder. Intenta de nuevo en un momento.");
-    }
-    // Caso no anticipado (p. ej. una incompatibilidad de runtime): se anexa
-    // nombre/mensaje real del error al mensaje que ve el cliente. No hay
-    // acceso a los logs del servidor de Cloudflare desde aquí, así que esto
-    // es la única forma práctica de diagnosticar qué fue exactamente.
-    const detalle = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`No se pudo conectar con el asesor (${detalle}).`);
+    // Si viene de llamarOpenAI() ya trae un mensaje amigable en español; si
+    // es otra cosa (p. ej. fetch fallando por red), se reenvía tal cual para
+    // no perder el detalle real — no hay acceso a los logs del servidor de
+    // Cloudflare desde aquí.
+    if (err instanceof Error) throw err;
+    throw new Error(`No se pudo conectar con el asesor: ${String(err)}`);
   }
 
   // No basta con `?? fallback`: un modelo de razonamiento sin presupuesto

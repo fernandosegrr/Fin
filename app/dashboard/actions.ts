@@ -325,6 +325,49 @@ export async function crearTransferencia(input: NuevaTransferencia): Promise<voi
   revalidatePath("/dashboard");
 }
 
+export interface ActualizarTransferenciaInput {
+  monto: number;
+  origen: MetodoPago;
+  destino: MetodoPago;
+  descripcion?: string | null;
+  fecha?: string;
+}
+
+export async function actualizarTransferencia(
+  id: string,
+  input: ActualizarTransferenciaInput,
+): Promise<void> {
+  if (!id) throw new Error("ID de traspaso inválido.");
+  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+    throw new Error("El monto debe ser mayor a 0.");
+  }
+  if (!esMetodoPago(input.origen) || !esMetodoPago(input.destino)) {
+    throw new Error("El método de pago no es válido.");
+  }
+  if (input.origen === input.destino) {
+    throw new Error("Elige dos métodos de pago distintos.");
+  }
+
+  const supabase = await createClient();
+  const user = await exigirUsuario(supabase);
+
+  const { error } = await supabase
+    .from("transferencias")
+    .update({
+      monto: redondearMonto(input.monto),
+      origen: input.origen,
+      destino: input.destino,
+      descripcion: input.descripcion?.trim() || null,
+      ...(input.fecha ? { fecha: fechaOHoy(input.fecha) } : {}),
+    })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+}
+
 export async function eliminarTransferencia(id: string): Promise<void> {
   if (!id) throw new Error("ID de traspaso inválido.");
 
@@ -1279,4 +1322,38 @@ export async function buscarTransacciones(input: {
     throw new Error(`No se pudo buscar el historial: ${error.message}`);
   }
   return { filas: (data ?? []) as unknown as TransaccionConCategoria[], total: count ?? 0 };
+}
+
+/**
+ * Busca traspasos entre métodos de pago para el Historial. Un traspaso toca
+ * DOS métodos (origen y destino): filtrar por `metodoPago` incluye el
+ * traspaso si cualquiera de los dos coincide, no solo el destino.
+ */
+export async function buscarTransferencias(input: {
+  busqueda?: string;
+  metodoPago?: "todos" | MetodoPago;
+  limite?: number;
+  offset?: number;
+}): Promise<{ filas: Transferencia[]; total: number }> {
+  const supabase = await createClient();
+  const limite = Math.min(50, Math.max(1, input.limite ?? 50));
+  const offset = Math.max(0, input.offset ?? 0);
+  const busqueda = input.busqueda?.trim() ?? "";
+
+  let query = supabase
+    .from("transferencias")
+    .select("*", { count: "exact" })
+    .order("fecha", { ascending: false })
+    .order("creado_en", { ascending: false });
+
+  if (input.metodoPago && input.metodoPago !== "todos") {
+    query = query.or(`origen.eq.${input.metodoPago},destino.eq.${input.metodoPago}`);
+  }
+  if (busqueda) {
+    query = query.ilike("descripcion", `%${escaparIlike(busqueda)}%`);
+  }
+
+  const { data, error, count } = await query.range(offset, offset + limite - 1);
+  if (error) throw new Error(`No se pudieron buscar los traspasos: ${error.message}`);
+  return { filas: (data ?? []) as Transferencia[], total: count ?? 0 };
 }

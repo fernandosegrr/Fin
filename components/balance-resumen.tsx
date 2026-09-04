@@ -20,9 +20,15 @@ import { AnimatedNumber } from "@/components/react-bits/AnimatedNumber";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
 import { formatearFechaCorta, hoyEnMexico, hoyISOEnMexico } from "@/lib/dates";
-import { ajustarSaldo, crearTransferencia, eliminarTransferencia, type BalanceMensual } from "@/app/dashboard/actions";
+import {
+  ajustarSaldo,
+  actualizarTransferencia,
+  crearTransferencia,
+  eliminarTransferencia,
+  type BalanceMensual,
+} from "@/app/dashboard/actions";
 import { useEscapeKey } from "@/lib/use-escape-key";
-import type { DesgloseMetodoPago, MetodoPago } from "@/lib/types";
+import type { DesgloseMetodoPago, MetodoPago, Transferencia } from "@/lib/types";
 
 interface Props {
   actual: BalanceMensual["actual"];
@@ -83,6 +89,7 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
   const [isSaving, setIsSaving] = useState(false);
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+  const [transferenciaEditandoId, setTransferenciaEditandoId] = useState<string | null>(null);
   const [modalAjuste, setModalAjuste] = useState(false);
   const [ajusteMetodo, setAjusteMetodo] = useState<MetodoPago>("efectivo");
   const [ajusteMonto, setAjusteMonto] = useState("");
@@ -133,7 +140,27 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
     setOrigen("tarjeta");
     setFecha(hoyISOEnMexico());
     setErrorForm(null);
+    setTransferenciaEditandoId(null);
     setModalAbierto(true);
+  }
+
+  function abrirEdicionTransferencia(t: Transferencia) {
+    setMontoTexto(String(t.monto));
+    setDescripcion(t.descripcion ?? "");
+    setOrigen(t.origen);
+    setFecha(t.fecha);
+    setErrorForm(null);
+    setTransferenciaEditandoId(t.id);
+    setModalAbierto(true);
+  }
+
+  function cancelarEdicionTransferencia() {
+    setTransferenciaEditandoId(null);
+    setMontoTexto("");
+    setDescripcion("");
+    setOrigen("tarjeta");
+    setFecha(hoyISOEnMexico());
+    setErrorForm(null);
   }
 
   async function manejarEnvioTransferencia(e: React.FormEvent) {
@@ -147,12 +174,27 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
     setIsSaving(true);
     setErrorForm(null);
     try {
-      await crearTransferencia({ monto, origen, destino, descripcion: descripcion.trim() || null, fecha });
-      setModalAbierto(false);
-      onTransferenciaRealizada?.({
-        texto: `¡Traspaso de ${formatearMonto(monto)} de ${NOMBRE_METODO[origen]} a ${NOMBRE_METODO[destino]} registrado! ⇄`,
-        tipo: "success",
-      });
+      if (transferenciaEditandoId) {
+        await actualizarTransferencia(transferenciaEditandoId, {
+          monto,
+          origen,
+          destino,
+          descripcion: descripcion.trim() || null,
+          fecha,
+        });
+        setModalAbierto(false);
+        onTransferenciaRealizada?.({
+          texto: `Traspaso corregido: ${formatearMonto(monto)} de ${NOMBRE_METODO[origen]} a ${NOMBRE_METODO[destino]}. ✏️`,
+          tipo: "success",
+        });
+      } else {
+        await crearTransferencia({ monto, origen, destino, descripcion: descripcion.trim() || null, fecha });
+        setModalAbierto(false);
+        onTransferenciaRealizada?.({
+          texto: `¡Traspaso de ${formatearMonto(monto)} de ${NOMBRE_METODO[origen]} a ${NOMBRE_METODO[destino]} registrado! ⇄`,
+          tipo: "success",
+        });
+      }
     } catch (err) {
       setErrorForm(err instanceof Error ? err.message : "Error al registrar el traspaso.");
     } finally {
@@ -161,11 +203,13 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
   }
 
   async function manejarEliminarTransferencia(id: string) {
+    if (eliminandoId) return;
     if (!confirm("¿Eliminar este traspaso? El saldo de cada método se revertirá.")) return;
     setEliminandoId(id);
     setErrorForm(null);
     try {
       await eliminarTransferencia(id);
+      if (transferenciaEditandoId === id) cancelarEdicionTransferencia();
       onTransferenciaRealizada?.({
         texto: "Traspaso eliminado.",
         tipo: "info",
@@ -325,7 +369,7 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
           <div className="flex items-center justify-between pb-3 border-b border-white/10">
             <h3 id="titulo-traspaso" className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <ArrowRightLeft className="h-4 w-4 text-indigo-400" />
-              Traspasar entre cuentas
+              {transferenciaEditandoId ? "Editar traspaso" : "Traspasar entre cuentas"}
             </h3>
             <button
               type="button"
@@ -338,6 +382,19 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
           </div>
 
           <form onSubmit={manejarEnvioTransferencia} className="mt-4 space-y-3.5">
+            {transferenciaEditandoId && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[11px] text-indigo-300">
+                <span>Corrigiendo un traspaso existente.</span>
+                <button
+                  type="button"
+                  onClick={cancelarEdicionTransferencia}
+                  className="font-semibold underline underline-offset-2 hover:text-indigo-200 shrink-0"
+                >
+                  Cancelar edición
+                </button>
+              </div>
+            )}
+
             {/* Origen -> Destino */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Desde</label>
@@ -433,20 +490,27 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
               </GlowButton>
               <GlowButton type="submit" variant="primary" disabled={isSaving} className="flex-1">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
-                Traspasar
+                {transferenciaEditandoId ? "Guardar cambios" : "Traspasar"}
               </GlowButton>
             </div>
 
             {actual.transferencias.length > 0 && (
               <div className="pt-3 border-t border-white/5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-                  Traspasos este mes
+                  Traspasos este mes · toca uno para corregirlo
                 </p>
                 <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
                   {actual.transferencias.map((t) => (
-                    <div
+                    <button
                       key={t.id}
-                      className="flex items-center justify-between gap-2 text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-950/50 border border-white/5"
+                      type="button"
+                      onClick={() => abrirEdicionTransferencia(t)}
+                      title="Editar traspaso"
+                      className={`flex w-full items-center justify-between gap-2 text-[11px] px-2.5 py-1.5 rounded-lg border transition-colors text-left ${
+                        transferenciaEditandoId === t.id
+                          ? "bg-indigo-600/10 border-indigo-500/50"
+                          : "bg-slate-950/50 border-white/5 hover:border-white/20"
+                      }`}
                     >
                       <span className="text-slate-400 min-w-0 truncate">
                         {formatearFechaCorta(t.fecha)} · {NOMBRE_METODO[t.origen]} → {NOMBRE_METODO[t.destino]}
@@ -455,21 +519,31 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
                         <span className="font-semibold tabular-nums text-slate-200">
                           {formatearMonto(t.monto)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => manejarEliminarTransferencia(t.id)}
-                          disabled={eliminandoId === t.id}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            manejarEliminarTransferencia(t.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter" && e.key !== " ") return;
+                            e.stopPropagation();
+                            e.preventDefault();
+                            manejarEliminarTransferencia(t.id);
+                          }}
                           aria-label="Eliminar traspaso"
-                          className="p-0.5 text-slate-500 hover:text-rose-400 disabled:opacity-50"
+                          aria-disabled={eliminandoId === t.id}
+                          className="p-0.5 text-slate-500 hover:text-rose-400 aria-disabled:opacity-50"
                         >
                           {eliminandoId === t.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
                           ) : (
                             <Trash2 className="h-3 w-3" />
                           )}
-                        </button>
+                        </span>
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

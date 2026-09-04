@@ -1,17 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, X, Loader2, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { buscarTransacciones } from "@/app/dashboard/actions";
+import { useEffect, useMemo, useState } from "react";
+import { Search, X, Loader2, ArrowUpRight, ArrowDownRight, ArrowRightLeft } from "lucide-react";
+import { buscarTransacciones, buscarTransferencias } from "@/app/dashboard/actions";
 import { formatearFechaCorta } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
 import { useEscapeKey } from "@/lib/use-escape-key";
-import type { MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
+import type { MetodoPago, TipoCategoria, TransaccionConCategoria, Transferencia } from "@/lib/types";
 
 interface Props {
   abierto: boolean;
   onCerrar: () => void;
 }
+
+const NOMBRE_METODO: Record<MetodoPago, string> = {
+  tarjeta: "Tarjeta",
+  efectivo: "Efectivo",
+};
+
+type ItemHistorial =
+  | { clase: "transaccion"; key: string; fecha: string; creadoEn: string; data: TransaccionConCategoria }
+  | { clase: "transferencia"; key: string; fecha: string; creadoEn: string; data: Transferencia };
 
 export function HistorialModal({ abierto, onCerrar }: Props) {
   const [busqueda, setBusqueda] = useState("");
@@ -19,6 +28,8 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
   const [metodo, setMetodo] = useState<"todos" | MetodoPago>("todos");
   const [filas, setFilas] = useState<TransaccionConCategoria[]>([]);
   const [total, setTotal] = useState(0);
+  const [filasTraspasos, setFilasTraspasos] = useState<Transferencia[]>([]);
+  const [totalTraspasos, setTotalTraspasos] = useState(0);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,14 +38,24 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
   useEffect(() => {
     if (!abierto) return;
     let cancelado = false;
+    // Un traspaso no es ingreso ni egreso: solo entra en la búsqueda cuando
+    // el filtro de tipo no lo excluye de antemano.
+    const incluirTraspasos = tipo === "todos";
     const t = setTimeout(() => {
       setCargando(true);
       setError(null);
-      buscarTransacciones({ busqueda, tipo, metodoPago: metodo, limite: 50, offset: 0 })
-        .then((r) => {
+      Promise.all([
+        buscarTransacciones({ busqueda, tipo, metodoPago: metodo, limite: 50, offset: 0 }),
+        incluirTraspasos
+          ? buscarTransferencias({ busqueda, metodoPago: metodo, limite: 50, offset: 0 })
+          : Promise.resolve({ filas: [] as Transferencia[], total: 0 }),
+      ])
+        .then(([rTx, rTr]) => {
           if (cancelado) return;
-          setFilas(r.filas);
-          setTotal(r.total);
+          setFilas(rTx.filas);
+          setTotal(rTx.total);
+          setFilasTraspasos(rTr.filas);
+          setTotalTraspasos(rTr.total);
         })
         .catch((err) => {
           if (!cancelado) setError(err instanceof Error ? err.message : "No se pudo buscar.");
@@ -48,6 +69,18 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
       clearTimeout(t);
     };
   }, [abierto, busqueda, tipo, metodo]);
+
+  const items = useMemo(() => {
+    const lista: ItemHistorial[] = [
+      ...filas.map((t) => ({ clase: "transaccion" as const, key: `tx-${t.id}`, fecha: t.fecha, creadoEn: t.creado_en, data: t })),
+      ...filasTraspasos.map((t) => ({ clase: "transferencia" as const, key: `tr-${t.id}`, fecha: t.fecha, creadoEn: t.creado_en, data: t })),
+    ];
+    lista.sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+      return a.creadoEn < b.creadoEn ? 1 : -1;
+    });
+    return lista;
+  }, [filas, filasTraspasos]);
 
   if (!abierto) return null;
 
@@ -113,25 +146,55 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
         </div>
 
         <p className="mt-2 text-[10px] text-slate-500">
-          {cargando ? "Buscando…" : `${filas.length} de ${total} movimientos`}
+          {cargando ? "Buscando…" : `${items.length} de ${total + totalTraspasos} movimientos`}
         </p>
 
         <div className="mt-2 flex-1 overflow-y-auto space-y-1.5 pr-1">
           {error && (
             <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">{error}</p>
           )}
-          {cargando && filas.length === 0 && (
+          {cargando && items.length === 0 && (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
             </div>
           )}
-          {!cargando && filas.length === 0 && !error && (
+          {!cargando && items.length === 0 && !error && (
             <p className="py-8 text-center text-xs text-slate-500">No hay movimientos con esos filtros.</p>
           )}
-          {filas.map((t) => {
+          {items.map((item) => {
+            if (item.clase === "transferencia") {
+              const t = item.data;
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/50 border border-indigo-500/10"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
+                      <ArrowRightLeft className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-200 truncate">
+                        Traspaso: {NOMBRE_METODO[t.origen]} → {NOMBRE_METODO[t.destino]}
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {formatearFechaCorta(t.fecha)}
+                        {t.descripcion ? ` · ${t.descripcion}` : ""}
+                        {" · edítalo o bórralo desde \"Transferir\""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold tabular-nums shrink-0 pl-2 text-indigo-300">
+                    {formatearMonto(t.monto)}
+                  </span>
+                </div>
+              );
+            }
+
+            const t = item.data;
             const esIngreso = t.categoria?.tipo === "ingreso";
             return (
-              <div key={t.id} className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/50 border border-white/5">
+              <div key={item.key} className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-950/50 border border-white/5">
                 <div className="flex items-center gap-2 min-w-0">
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${

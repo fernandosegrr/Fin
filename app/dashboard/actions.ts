@@ -622,7 +622,7 @@ export async function obtenerBalanceMensual(
   // - las transacciones del mes anterior (para la comparación), sin límite
   // - los traspasos del mes actual
   // - el saldo histórico acumulado por método, agregado en la base de datos
-  let [resLista, filasTotalesActual, filasAnterior, transferenciasActual, saldosHistoricos] =
+  const [resListaInicial, filasTotalesActual, filasAnterior, transferenciasActual, saldosHistoricos] =
     await Promise.all([
       supabase
         .from("transacciones")
@@ -652,6 +652,7 @@ export async function obtenerBalanceMensual(
       calcularSaldosHistoricos(supabase, rangoActual.inicio),
     ]);
 
+  let resLista = resListaInicial;
   if (resLista.error && esErrorEsquemaClientes(resLista.error.message)) {
     resLista = await supabase
       .from("transacciones")

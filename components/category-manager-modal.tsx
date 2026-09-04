@@ -11,9 +11,11 @@ interface Props {
   abierto: boolean;
   onCerrar: () => void;
   categorias: Categoria[];
+  /** Se llama con la categoría recién creada (p. ej. para seleccionarla en el modal de captura). */
+  onCategoriaCreada?: (categoria: Categoria) => void;
 }
 
-export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
+export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategoriaCreada }: Props) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoCategoria>("egreso");
   const [grupo, setGrupo] = useState<GrupoCategoria>("variable");
@@ -35,12 +37,13 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
 
     startTransition(async () => {
       try {
-        await crearCategoria({
+        const creada = await crearCategoria({
           nombre,
           tipo,
           grupo: tipo === "ingreso" ? null : grupo,
         });
         setNombre("");
+        onCategoriaCreada?.(creada);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al crear categoría.");
       }
@@ -236,7 +239,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias }: Props) {
                   <span className="font-semibold text-rose-300">&quot;{categoriaAEliminar.nombre}&quot;</span> será eliminada.
                 </p>
                 <p className="text-[11px] text-slate-500 mt-1.5">
-                  ⚠️ Los presupuestos asociados también serán eliminados. Las transacciones quedarán sin categoría.
+                  Los presupuestos de esta categoría se eliminan. Si tiene movimientos, no se podrá borrar: cámbialos o elimínalos primero.
                 </p>
               </div>
               <div className="flex gap-2 w-full mt-1">

@@ -11,6 +11,19 @@ export function formatearMonto(monto: number): string {
 }
 
 /**
+ * PostgREST a veces entrega `numeric` como string. Sumar sin convertir
+ * concatena ("0" + "100" = "0100") y los totales del mes salen basura.
+ */
+export function aNumero(valor: unknown): number {
+  const n = typeof valor === "number" ? valor : Number(valor);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function redondearMonto(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
+
+/**
  * Mayúscula solo en la primera letra ("julio de 2026" → "Julio de 2026").
  * La clase de Tailwind `capitalize` pone mayúscula en CADA palabra (incluida
  * "de"), que es incorrecto en español — por eso esto se hace en JS.

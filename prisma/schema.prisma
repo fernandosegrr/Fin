@@ -63,15 +63,44 @@ model Transaccion {
   descripcion String?
   /// Suscripción/gasto recurrente que originó esta transacción, si aplica.
   gastoRecurrenteId String?  @map("gasto_recurrente_id") @db.Uuid
+  /// Cliente/proyecto al que se asocia un ingreso (opcional).
+  clienteId         String?  @map("cliente_id") @db.Uuid
   creadoEn          DateTime @default(now()) @map("creado_en") @db.Timestamptz
 
   categoria       Categoria        @relation(fields: [categoriaId], references: [id])
   gastoRecurrente GastoRecurrente? @relation(fields: [gastoRecurrenteId], references: [id])
+  cliente         Cliente?         @relation(fields: [clienteId], references: [id])
 
   @@index([userId, fecha(sort: Desc)])
   @@index([userId, categoriaId])
   @@index([gastoRecurrenteId])
+  @@index([clienteId])
   @@map("transacciones")
+}
+
+model Cliente {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  nombre   String
+  creadoEn DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  transacciones Transaccion[]
+
+  @@unique([userId, nombre])
+  @@index([userId, nombre])
+  @@map("clientes")
+}
+
+/// Una meta de ahorro activa por usuario (el patrimonio total se compara contra el objetivo).
+model MetaAhorro {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @unique @map("user_id") @db.Uuid
+  nombre        String
+  montoObjetivo Decimal   @map("monto_objetivo") @db.Decimal
+  fechaLimite   DateTime? @map("fecha_limite") @db.Date
+  creadoEn      DateTime  @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@map("metas_ahorro")
 }
 
 model Presupuesto {

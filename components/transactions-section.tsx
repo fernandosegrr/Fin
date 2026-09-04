@@ -2,12 +2,12 @@
 
 import { startTransition, useOptimistic, useState, useMemo } from "react";
 import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { crearTransaccion, actualizarTransaccion, eliminarTransaccion } from "@/app/dashboard/actions";
+import { crearTransaccion, actualizarTransaccion, eliminarTransaccion, crearCliente } from "@/app/dashboard/actions";
 import { formatearFechaCorta, hoyISOEnMexico } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
-import type { Categoria, MetodoPago, TransaccionConCategoria } from "@/lib/types";
+import type { Categoria, Cliente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
 import { TransactionCaptureModal, type DatosNuevaTransaccion } from "./transaction-capture-modal";
 import { CategoryManagerModal } from "./category-manager-modal";
 
@@ -16,6 +16,7 @@ interface Props {
   /** Total real de movimientos del mes en la BD (puede ser mayor a `initialTransacciones.length`, que está limitado a 200). */
   totalTransacciones: number;
   categorias: Categoria[];
+  clientes?: Cliente[];
   onTransaccionCambiada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
@@ -27,6 +28,7 @@ export function TransactionsSection({
   initialTransacciones,
   totalTransacciones,
   categorias,
+  clientes = [],
   onTransaccionCambiada,
 }: Props) {
   const [modalCapturaAbierto, setModalCapturaAbierto] = useState(false);
@@ -71,6 +73,16 @@ export function TransactionsSection({
     });
   }, [transacciones, busqueda, filtroTipo, filtroMetodo]);
 
+  async function resolverClienteId(datos: DatosNuevaTransaccion): Promise<string | null> {
+    if (datos.tipo !== "ingreso") return null;
+    if (datos.cliente_id) return datos.cliente_id;
+    if (datos.cliente_nuevo?.trim()) {
+      const creado = await crearCliente(datos.cliente_nuevo.trim());
+      return creado.id;
+    }
+    return null;
+  }
+
   function manejarEnvio(datos: DatosNuevaTransaccion) {
     const categoria = categorias.find((c) => c.id === datos.categoria_id) ?? null;
     contadorOptimista += 1;
@@ -98,12 +110,14 @@ export function TransactionsSection({
       startTransition(async () => {
         setTransaccionesOptimista({ accion: "actualizar", item: actualizada });
         try {
+          const clienteId = await resolverClienteId(datos);
           await actualizarTransaccion(datos.id!, {
             categoria_id: datos.categoria_id,
             monto: datos.monto,
             descripcion: datos.descripcion,
             metodo_pago: datos.metodo_pago,
             fecha: datos.fecha,
+            cliente_id: clienteId,
           });
           onTransaccionCambiada?.({
             texto: `¡Movimiento de ${formatearMonto(datos.monto)} actualizado con éxito! ✏️`,
@@ -135,12 +149,14 @@ export function TransactionsSection({
       startTransition(async () => {
         setTransaccionesOptimista({ accion: "crear", item: nueva });
         try {
+          const clienteId = await resolverClienteId(datos);
           await crearTransaccion({
             categoria_id: datos.categoria_id,
             monto: datos.monto,
             descripcion: datos.descripcion,
             metodo_pago: datos.metodo_pago,
             fecha,
+            cliente_id: clienteId,
           });
           onTransaccionCambiada?.({
             texto: esIngreso
@@ -324,9 +340,12 @@ export function TransactionsSection({
                 return (
                   <div
                     key={t.id}
-                    onClick={() => abrirEdicion(t)}
-                    className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 hover:border-white/20 hover:bg-slate-800/40 transition-all cursor-pointer ${
-                      t.pendiente ? "opacity-50" : ""
+                    onClick={() => {
+                      if (t.pendiente) return;
+                      abrirEdicion(t);
+                    }}
+                    className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 hover:border-white/20 hover:bg-slate-800/40 transition-all ${
+                      t.pendiente ? "opacity-50 cursor-wait" : "cursor-pointer"
                     }`}
                   >
                     <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -348,6 +367,9 @@ export function TransactionsSection({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="truncate text-xs sm:text-sm font-semibold text-slate-200">
                             {t.categoria?.nombre ?? "Sin categoría"}
+                            {t.cliente?.nombre ? (
+                              <span className="ml-1 font-medium text-slate-400">· {t.cliente.nombre}</span>
+                            ) : null}
                           </p>
                           <span
                             className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium border ${
@@ -401,6 +423,7 @@ export function TransactionsSection({
       {/* Modales */}
       <TransactionCaptureModal
         categorias={categorias}
+        clientes={clientes}
         abierto={modalCapturaAbierto}
         transaccionEditar={transaccionAEditar}
         onCerrar={() => setModalCapturaAbierto(false)}

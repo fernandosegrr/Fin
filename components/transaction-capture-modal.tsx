@@ -6,7 +6,7 @@ import { GlowButton } from "@/components/react-bits/GlowButton";
 import { CategoryManagerModal } from "./category-manager-modal";
 import { hoyISOEnMexico } from "@/lib/dates";
 import { useEscapeKey } from "@/lib/use-escape-key";
-import type { Categoria, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
+import type { Categoria, Cliente, MetodoPago, TipoCategoria, TransaccionConCategoria } from "@/lib/types";
 
 export interface DatosNuevaTransaccion {
   id?: string;
@@ -16,10 +16,13 @@ export interface DatosNuevaTransaccion {
   descripcion: string | null;
   metodo_pago: MetodoPago;
   fecha?: string;
+  cliente_id?: string | null;
+  cliente_nuevo?: string | null;
 }
 
 interface Props {
   categorias: Categoria[];
+  clientes?: Cliente[];
   abierto: boolean;
   transaccionEditar?: TransaccionConCategoria | null;
   onCerrar: () => void;
@@ -29,6 +32,7 @@ interface Props {
 
 export function TransactionCaptureModal({
   categorias,
+  clientes = [],
   abierto,
   transaccionEditar,
   onCerrar,
@@ -43,6 +47,8 @@ export function TransactionCaptureModal({
   const [fecha, setFecha] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
+  const [clienteId, setClienteId] = useState("");
+  const [clienteNuevo, setClienteNuevo] = useState("");
 
   const esEdicion = Boolean(transaccionEditar);
 
@@ -63,31 +69,37 @@ export function TransactionCaptureModal({
   }
 
   useEffect(() => {
-    if (abierto) {
-      if (transaccionEditar) {
-        const tTipo = transaccionEditar.categoria?.tipo || "egreso";
-        setTipo(tTipo);
-        setMontoTexto(String(transaccionEditar.monto));
-        setCategoriaId(transaccionEditar.categoria_id);
-        setDescripcion(transaccionEditar.descripcion || "");
-        setMetodoPago(transaccionEditar.metodo_pago || "tarjeta");
-        setFecha(transaccionEditar.fecha || "");
-      } else {
-        setTipo("egreso");
-        setMontoTexto("");
-        setDescripcion("");
-        setMetodoPago("tarjeta");
-        // Usar fecha de hoy por defecto en nuevas transacciones (zona horaria
-        // de México, no UTC: pasadas las 18:00 UTC ya es "mañana" en UTC)
-        setFecha(hoyISOEnMexico());
-        const primeraEgreso = categorias.find((c) => c.tipo === "egreso");
-        setCategoriaId(primeraEgreso?.id ?? "");
-      }
-      setError(null);
+    if (!abierto) return;
+    if (transaccionEditar) {
+      const tTipo = transaccionEditar.categoria?.tipo || "egreso";
+      setTipo(tTipo);
+      setMontoTexto(String(transaccionEditar.monto));
+      setCategoriaId(transaccionEditar.categoria_id);
+      setDescripcion(transaccionEditar.descripcion || "");
+      setMetodoPago(transaccionEditar.metodo_pago || "tarjeta");
+      setFecha(transaccionEditar.fecha || "");
+      setClienteId(transaccionEditar.cliente_id || transaccionEditar.cliente?.id || "");
+      setClienteNuevo("");
+    } else {
+      setTipo("egreso");
+      setMontoTexto("");
+      setDescripcion("");
+      setMetodoPago("tarjeta");
+      setClienteId("");
+      setClienteNuevo("");
+      // Usar fecha de hoy por defecto en nuevas transacciones (zona horaria
+      // de México, no UTC: pasadas las 18:00 UTC ya es "mañana" en UTC)
+      setFecha(hoyISOEnMexico());
+      const primeraEgreso = categorias.find((c) => c.tipo === "egreso");
+      setCategoriaId(primeraEgreso?.id ?? "");
     }
-  }, [abierto, transaccionEditar, categorias]);
+    setError(null);
+    // `categorias` a propósito fuera: si se incluye, crear una categoría
+    // desde este modal resetea monto/fecha/descripción.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto, transaccionEditar]);
 
-  useEscapeKey(abierto, onCerrar);
+  useEscapeKey(abierto && !modalCategoriasAbierto, onCerrar);
 
   if (!abierto) return null;
 
@@ -112,6 +124,8 @@ export function TransactionCaptureModal({
       descripcion: descripcion.trim() || null,
       metodo_pago: metodoPago,
       fecha: fecha || undefined,
+      cliente_id: tipo === "ingreso" ? clienteId || null : null,
+      cliente_nuevo: tipo === "ingreso" && !clienteId ? clienteNuevo.trim() || null : null,
     });
     onCerrar();
   }
@@ -292,6 +306,39 @@ export function TransactionCaptureModal({
               </div>
             </div>
 
+            {tipo === "ingreso" && (
+              <div>
+                <label htmlFor="cliente" className="block text-xs font-medium text-slate-400 mb-1">
+                  Cliente / proyecto (opcional)
+                </label>
+                <select
+                  id="cliente"
+                  value={clienteId}
+                  onChange={(e) => {
+                    setClienteId(e.target.value);
+                    if (e.target.value) setClienteNuevo("");
+                  }}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none appearance-none"
+                >
+                  <option value="">Sin cliente / uno nuevo abajo</option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+                {!clienteId && (
+                  <input
+                    type="text"
+                    value={clienteNuevo}
+                    onChange={(e) => setClienteNuevo(e.target.value)}
+                    placeholder="Nombre nuevo (ej. Chikicut, Intesa...)"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400/60 focus:outline-none"
+                  />
+                )}
+              </div>
+            )}
+
             {/* Descripción */}
             <div>
               <label htmlFor="descripcion" className="block text-xs font-medium text-slate-400 mb-1">
@@ -357,6 +404,10 @@ export function TransactionCaptureModal({
         categorias={categorias}
         abierto={modalCategoriasAbierto}
         onCerrar={() => setModalCategoriasAbierto(false)}
+        onCategoriaCreada={(creada) => {
+          if (creada.tipo === tipo) setCategoriaId(creada.id);
+          setModalCategoriasAbierto(false);
+        }}
       />
     </>
   );

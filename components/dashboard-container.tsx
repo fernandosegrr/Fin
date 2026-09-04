@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, useCallback } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AsesorChat } from "@/components/asesor-chat";
 import { BalanceResumen } from "@/components/balance-resumen";
@@ -16,26 +16,50 @@ import { ToastNotification, type ToastMessage } from "@/components/toast-notific
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { ShinyText } from "@/components/react-bits/ShinyText";
-import { obtenerBalanceMensual, obtenerPresupuestosConGasto, obtenerGastosRecurrentes, crearTransaccion, signOut, type BalanceMensual } from "@/app/dashboard/actions";
+import {
+  obtenerBalanceMensual,
+  obtenerPresupuestosConGasto,
+  obtenerGastosRecurrentes,
+  obtenerClientes,
+  obtenerMetaAhorro,
+  crearTransaccion,
+  signOut,
+  type BalanceMensual,
+} from "@/app/dashboard/actions";
 import { primerDiaDelMes } from "@/lib/dates";
-import type { Categoria, GastoRecurrente, MetodoPago, PresupuestoConGasto } from "@/lib/types";
+import type { Categoria, Cliente, GastoRecurrente, MetaAhorro, MetodoPago, PresupuestoConGasto } from "@/lib/types";
+import { SavingsGoalCard } from "@/components/savings-goal-card";
+import { HistorialModal } from "@/components/historial-modal";
 
 interface Props {
   initialBalance: BalanceMensual;
   initialPresupuestos: PresupuestoConGasto[];
   initialGastosRecurrentes: GastoRecurrente[];
   categorias: Categoria[];
+  initialClientes: Cliente[];
+  initialMeta: MetaAhorro | null;
 }
 
-export function DashboardContainer({ initialBalance, initialPresupuestos, initialGastosRecurrentes, categorias }: Props) {
+export function DashboardContainer({
+  initialBalance,
+  initialPresupuestos,
+  initialGastosRecurrentes,
+  categorias,
+  initialClientes,
+  initialMeta,
+}: Props) {
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
+  const [asesorVisitado, setAsesorVisitado] = useState(false);
   const [balance, setBalance] = useState<BalanceMensual>(initialBalance);
   const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>(initialPresupuestos);
   const [gastosRecurrentes, setGastosRecurrentes] = useState<GastoRecurrente[]>(initialGastosRecurrentes);
+  const [clientes, setClientes] = useState<Cliente[]>(initialClientes);
+  const [meta, setMeta] = useState<MetaAhorro | null>(initialMeta);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
   const [anio, setAnio] = useState(initialBalance.actual.anio);
   const [mes, setMes] = useState(initialBalance.actual.mes);
   const [isPending, startTransition] = useTransition();
-  const [conexionEnVivo, setConexionEnVivo] = useState(false);
+  const [estadoConexion, setEstadoConexion] = useState<"conectando" | "vivo" | "caido">("conectando");
 
   // NOTA: `initial*` (props) solo se usan para sembrar el estado en el primer
   // render (SSR). NO se re-sincronizan en un useEffect: cada revalidatePath()
@@ -110,15 +134,19 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
 
       startTransition(async () => {
         try {
-          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes] = await Promise.all([
+          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes, nuevosClientes, nuevaMeta] = await Promise.all([
             obtenerBalanceMensual(anioActual, mesActual),
             obtenerPresupuestosConGasto(anioActual, mesActual),
             obtenerGastosRecurrentes(),
+            obtenerClientes(),
+            obtenerMetaAhorro(),
           ]);
           if (solicitudIdRef.current !== idSolicitud) return;
           setBalance(nuevoBalance);
           setPresupuestos(nuevosPresupuestos);
           setGastosRecurrentes(nuevosRecurrentes);
+          setClientes(nuevosClientes);
+          setMeta(nuevaMeta);
         } catch (err) {
           if (solicitudIdRef.current !== idSolicitud) return;
           console.error("Error recargando datos del dashboard:", err);
@@ -156,6 +184,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     // Empieza en `true` para no tratar la primera conexión como una
     // "reconexión" (evitaría una recarga redundante justo tras el SSR inicial).
     let estabaConectado = true;
+    let algunaVezVivo = false;
 
     function suscribir(userId: string) {
       if (canal) supabase.removeChannel(canal);
@@ -167,10 +196,13 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "metas_ahorro", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "clientes", filter: filtro }, () => recargarDatos())
         .subscribe((status) => {
           if (cancelado) return;
           const conectado = status === "SUBSCRIBED";
-          setConexionEnVivo(conectado);
+          setEstadoConexion(conectado ? "vivo" : algunaVezVivo ? "caido" : "conectando");
+          if (conectado) algunaVezVivo = true;
           // Si el canal se había caído (celular en background, red inestable)
           // y se reconecta, pudimos perder eventos mientras estuvo caído:
           // refrescamos para no quedarnos con datos desfasados.
@@ -201,7 +233,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
 
     return () => {
       cancelado = true;
-      setConexionEnVivo(false);
+      setEstadoConexion("conectando");
       document.removeEventListener("visibilitychange", alRecuperarActividad);
       window.removeEventListener("focus", alRecuperarActividad);
       window.removeEventListener("online", alRecuperarActividad);
@@ -283,7 +315,10 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
     }
   }
 
-  const mesISO = primerDiaDelMes(anio, mes);
+  // El mes del presupuesto debe ser el que YA está cargado en pantalla, no el
+  // que se acaba de pedir: entre el clic de "mes siguiente" y la respuesta,
+  // `anio`/`mes` ya cambiaron pero `presupuestos` sigue siendo del mes viejo.
+  const mesISO = primerDiaDelMes(balance.actual.anio, balance.actual.mes);
 
   return (
     <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-24 px-3 sm:px-6 bg-[#070a12] relative">
@@ -309,20 +344,24 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
             </h1>
             <p
               className={`text-[10px] mt-0.5 flex items-center gap-1 font-medium ${
-                conexionEnVivo ? "text-emerald-400" : "text-slate-500"
+                estadoConexion === "vivo" ? "text-emerald-400" : "text-slate-500"
               }`}
             >
               <span className="relative flex h-2 w-2">
-                {conexionEnVivo && (
+                {estadoConexion === "vivo" && (
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 )}
                 <span
                   className={`relative inline-flex rounded-full h-2 w-2 ${
-                    conexionEnVivo ? "bg-emerald-500" : "bg-slate-600"
+                    estadoConexion === "vivo" ? "bg-emerald-500" : "bg-slate-600"
                   }`}
                 ></span>
               </span>
-              {conexionEnVivo ? "En Vivo (WebSocket)" : "Reconectando…"}
+              {estadoConexion === "vivo"
+                ? "En Vivo (WebSocket)"
+                : estadoConexion === "conectando"
+                  ? "Conectando…"
+                  : "Reconectando…"}
             </p>
           </div>
         </div>
@@ -331,6 +370,15 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
           {/* Los tres valores salen del mismo balance cargado: así el archivo
               exportado nunca lleva el nombre de un mes y el contenido de otro
               durante los milisegundos en que se está cambiando de mes. */}
+          <GlowButton
+            variant="ghost"
+            type="button"
+            className="!p-2"
+            title="Buscar en todo el historial"
+            onClick={() => setHistorialAbierto(true)}
+          >
+            <Search className="h-4 w-4 text-slate-400 hover:text-emerald-400" />
+          </GlowButton>
           <ExportButton
             anio={balance.actual.anio}
             mes={balance.actual.mes}
@@ -367,6 +415,11 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
               anterior={balance.anterior}
               onTransferenciaRealizada={recargarDatos}
             />
+            <SavingsGoalCard
+              meta={meta}
+              saldoActual={balance.actual.saldoTotalDisponible}
+              onCambio={recargarDatos}
+            />
             <TransactionsSection
               // Se llavea con el mes YA CARGADO, no con el solicitado: entre
               // el clic y la respuesta del servidor, `anio`/`mes` ya cambiaron
@@ -377,6 +430,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
               initialTransacciones={balance.actual.transacciones}
               totalTransacciones={balance.actual.totalTransaccionesMes}
               categorias={categorias}
+              clientes={clientes}
               onTransaccionCambiada={recargarDatos}
             />
           </div>
@@ -392,6 +446,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
               anio={balance.actual.anio}
               mes={balance.actual.mes}
               onRegistrarTransaccion={registrarGastoRecurrente}
+              onListaCambiada={recargarDatos}
             />
           </div>
         )}
@@ -404,6 +459,7 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
               egresosVariables={balance.actual.egresosVariables}
               egresosPorCategoria={balance.actual.egresosPorCategoria}
               totalEgresos={balance.actual.egresos}
+              ingresosPorCliente={balance.actual.ingresosPorCliente}
               anio={balance.actual.anio}
               mes={balance.actual.mes}
             />
@@ -418,20 +474,30 @@ export function DashboardContainer({ initialBalance, initialPresupuestos, initia
         {/* Pestaña 4: PRESUPUESTOS (Barras de Salud Financiera y Límites) */}
         {tabActiva === "presupuestos" && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <PresupuestosProgreso items={presupuestos} mesISO={mesISO} />
+            <PresupuestosProgreso items={presupuestos} mesISO={mesISO} onPresupuestosGuardados={recargarDatos} />
           </div>
         )}
 
-        {/* Pestaña 5: ASESOR (Chat con IA + memoria persistente) */}
-        {tabActiva === "asesor" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
+        {/* Pestaña 5: ASESOR — se monta la primera vez que se abre y se queda
+            vivo (hidden) para no perder el borrador, el "pensando…" ni recargar
+            el historial cada vez que se cambia de pestaña. */}
+        {asesorVisitado && (
+          <div className={tabActiva === "asesor" ? "space-y-4 animate-in fade-in duration-300" : "hidden"}>
             <AsesorChat anio={balance.actual.anio} mes={balance.actual.mes} />
           </div>
         )}
       </div>
 
       {/* Navegación por Pestañas Inferior (Bottom Nav Bar) */}
-      <BottomNavigationBar tabActiva={tabActiva} onCambiarTab={setTabActiva} />
+      <HistorialModal abierto={historialAbierto} onCerrar={() => setHistorialAbierto(false)} />
+
+      <BottomNavigationBar
+        tabActiva={tabActiva}
+        onCambiarTab={(tab) => {
+          if (tab === "asesor") setAsesorVisitado(true);
+          setTabActiva(tab);
+        }}
+      />
     </main>
   );
 }

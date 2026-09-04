@@ -4,6 +4,8 @@ import {
   obtenerCategorias,
   obtenerPresupuestosConGasto,
   obtenerGastosRecurrentes,
+  obtenerClientes,
+  obtenerMetaAhorro,
 } from "./actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -19,11 +21,13 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [balance, presupuestos, categorias, gastosRecurrentes] = await Promise.all([
+  const [balance, presupuestos, categorias, gastosRecurrentes, clientes, meta] = await Promise.all([
     obtenerBalanceMensual(),
     obtenerPresupuestosConGasto(),
     obtenerCategorias(),
     obtenerGastosRecurrentes(),
+    obtenerClientes(),
+    obtenerMetaAhorro(),
   ]);
 
   return (
@@ -32,6 +36,8 @@ export default async function DashboardPage() {
       initialPresupuestos={presupuestos}
       initialGastosRecurrentes={gastosRecurrentes}
       categorias={categorias}
+      initialClientes={clientes}
+      initialMeta={meta}
     />
   );
 }

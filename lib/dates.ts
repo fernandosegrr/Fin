@@ -91,3 +91,23 @@ export function formatearFechaCorta(fechaISO: string): string {
   const dia = Number(diaStr);
   return `${dia} ${MESES_CORTOS[mes - 1]}`;
 }
+
+/** Año/mes de calendario (1-12). Rechaza basura que llegue del cliente. */
+export function esMesCalendario(anio: number, mes: number): boolean {
+  return (
+    Number.isInteger(anio) &&
+    Number.isInteger(mes) &&
+    mes >= 1 &&
+    mes <= 12 &&
+    anio >= 2000 &&
+    anio <= 2100
+  );
+}
+
+/** `YYYY-MM-DD` real (rechaza 2026-02-31 y texto suelto). */
+export function esFechaISO(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const [anio, mes, dia] = valor.split("-").map(Number);
+  const utc = new Date(Date.UTC(anio, mes - 1, dia));
+  return utc.getUTCFullYear() === anio && utc.getUTCMonth() === mes - 1 && utc.getUTCDate() === dia;
+}

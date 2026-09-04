@@ -20,7 +20,21 @@ export interface Transaccion {
   metodo_pago?: MetodoPago;
   /** Suscripción/gasto recurrente que generó esta transacción, si aplica. */
   gasto_recurrente_id?: string | null;
+  cliente_id?: string | null;
   creado_en: string;
+}
+
+export interface Cliente {
+  id: string;
+  user_id?: string;
+  nombre: string;
+}
+
+export interface MetaAhorro {
+  id: string;
+  nombre: string;
+  monto_objetivo: number;
+  fecha_limite: string | null; // 'YYYY-MM-DD'
 }
 
 /** Traspaso de dinero entre métodos de pago. No es ingreso ni egreso: no afecta el patrimonio total. */
@@ -38,6 +52,7 @@ export interface Transferencia {
 /** Transacción con su categoría embebida (via join), tal como la usa la UI. */
 export interface TransaccionConCategoria extends Transaccion {
   categoria: Pick<Categoria, "id" | "nombre" | "tipo" | "grupo"> | null;
+  cliente?: Pick<Cliente, "id" | "nombre"> | null;
 }
 
 export interface Presupuesto {
@@ -54,7 +69,7 @@ export interface GastoRecurrente {
   nombre: string;
   monto: number;
   dia_cobro: number; // 1-31
-  categoria_id: string;
+  categoria_id: string | null;
   metodo_pago: MetodoPago;
   categoria?: Pick<Categoria, "id" | "nombre" | "tipo" | "grupo"> | null;
 }
@@ -99,8 +114,16 @@ export interface ResumenMes {
   egresosVariables: number;
   /** Egresos del mes agrupados por categoría, de mayor a menor. */
   egresosPorCategoria: EgresoPorCategoria[];
+  /** Ingresos del mes agrupados por cliente/proyecto, de mayor a menor. */
+  ingresosPorCliente: IngresoPorCliente[];
   /** IDs de gastos recurrentes que ya generaron un cobro en este mes. */
   recurrentesCobrados: string[];
+}
+
+export interface IngresoPorCliente {
+  cliente_id: string | null;
+  nombre: string;
+  monto: number;
 }
 
 export interface PresupuestoConGasto {

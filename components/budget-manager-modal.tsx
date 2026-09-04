@@ -13,6 +13,7 @@ interface Props {
   onCerrar: () => void;
   items: PresupuestoConGasto[];
   mesISO: string;
+  onGuardado?: () => void;
 }
 
 function limitesDesdeItems(items: PresupuestoConGasto[]): Record<string, string> {
@@ -25,7 +26,7 @@ function limitesDesdeItems(items: PresupuestoConGasto[]): Record<string, string>
   return mapa;
 }
 
-export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) {
+export function BudgetManagerModal({ abierto, onCerrar, items, mesISO, onGuardado }: Props) {
   const [limites, setLimites] = useState<Record<string, string>>(() => limitesDesdeItems(items));
 
   const [isPending, startTransition] = useTransition();
@@ -67,6 +68,7 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO }: Props) 
             return guardarPresupuesto(item.categoria.id, montoLimite, mesISO);
           }),
         );
+        onGuardado?.();
         setMensajeExito(true);
         setTimeout(() => {
           setMensajeExito(false);

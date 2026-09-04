@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { obtenerTransaccionesCompletasDelMes } from "@/app/dashboard/actions";
+import { obtenerTransaccionesCompletasDelMes, obtenerTransferenciasCompletasDelMes } from "@/app/dashboard/actions";
 
 interface Props {
   anio: number;
@@ -21,19 +21,23 @@ export function ExportButton({ anio, mes, nombreMes }: Props) {
       // Se piden las transacciones del mes completo (sin el límite de 200
       // filas que usa la vista principal por rendimiento) para que el archivo
       // nunca quede incompleto en meses con muchos movimientos.
-      const transacciones = await obtenerTransaccionesCompletasDelMes(anio, mes);
+      const [transacciones, transferencias] = await Promise.all([
+        obtenerTransaccionesCompletasDelMes(anio, mes),
+        obtenerTransferenciasCompletasDelMes(anio, mes),
+      ]);
 
-      if (transacciones.length === 0) {
-        alert("No hay transacciones registradas en este mes para exportar.");
+      if (transacciones.length === 0 && transferencias.length === 0) {
+        alert("No hay movimientos ni traspasos en este mes para exportar.");
         return;
       }
 
-      const encabezados = ["Fecha", "Categoría", "Tipo", "Grupo", "Método de Pago", "Descripción", "Monto"];
+      const encabezados = ["Fecha", "Categoría", "Tipo", "Grupo", "Cliente", "Método de Pago", "Descripción", "Monto"];
       const filas = transacciones.map((t) => [
         t.fecha,
         t.categoria?.nombre || "Sin categoría",
         t.categoria?.tipo || "",
         t.categoria?.grupo || "",
+        t.cliente?.nombre || "",
         t.metodo_pago || "tarjeta",
         t.descripcion || "",
         t.monto,
@@ -47,6 +51,20 @@ export function ExportButton({ anio, mes, nombreMes }: Props) {
       const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...filas]);
       const libro = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(libro, hoja, "Movimientos");
+
+      if (transferencias.length > 0) {
+        const hojaTraspasos = XLSX.utils.aoa_to_sheet([
+          ["Fecha", "Origen", "Destino", "Descripción", "Monto"],
+          ...transferencias.map((t) => [
+            t.fecha,
+            t.origen,
+            t.destino,
+            t.descripcion || "",
+            t.monto,
+          ]),
+        ]);
+        XLSX.utils.book_append_sheet(libro, hojaTraspasos, "Traspasos");
+      }
       const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
 
       // Blob + URL.createObjectURL en vez de un data: URI: Safari en iOS no

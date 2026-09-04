@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useMemo, useOptimistic, useState } from "react";
-import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2 } from "lucide-react";
+import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2, Pencil } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { capitalizarPrimeraLetra, formatearMonto } from "@/lib/format";
@@ -9,6 +9,7 @@ import { hoyEnMexico, hoyISOEnMexico, nombreDelMes } from "@/lib/dates";
 import { useEscapeKey } from "@/lib/use-escape-key";
 import type { Categoria, GastoRecurrente, MetodoPago } from "@/lib/types";
 import {
+  actualizarGastoRecurrente,
   crearGastoRecurrente,
   eliminarGastoRecurrente,
 } from "@/app/dashboard/actions";
@@ -37,6 +38,8 @@ interface Props {
     fecha: string;
     tipo: "egreso";
   }) => Promise<void>;
+  /** Recarga la lista persistida (crear/eliminar suscripción). Sin esto, al terminar el optimistic UI se revierte al snapshot viejo. */
+  onListaCambiada?: () => void;
 }
 
 let contadorOptimista = 0;
@@ -48,8 +51,10 @@ export function RecurringExpenses({
   anio,
   mes,
   onRegistrarTransaccion,
+  onListaCambiada,
 }: Props) {
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [editando, setEditando] = useState<GastoRecurrente | null>(null);
   const [nombre, setNombre] = useState("");
   const [montoTexto, setMontoTexto] = useState("");
   const [diaCobro, setDiaCobro] = useState(5);
@@ -58,9 +63,35 @@ export function RecurringExpenses({
   const [isSaving, setIsSaving] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
+  function resetFormulario() {
+    setNombre("");
+    setMontoTexto("");
+    setDiaCobro(5);
+    setCategoriaId("");
+    setMetodoPago("tarjeta");
+    setEditando(null);
+    setErrorForm(null);
+  }
+
+  function abrirModalNuevo() {
+    resetFormulario();
+    setModalAbierto(true);
+  }
+
+  function abrirModalEditar(rec: GastoRecurrente) {
+    setEditando(rec);
+    setNombre(rec.nombre);
+    setMontoTexto(String(rec.monto));
+    setDiaCobro(rec.dia_cobro);
+    setCategoriaId(rec.categoria_id ?? "");
+    setMetodoPago(rec.metodo_pago);
+    setErrorForm(null);
+    setModalAbierto(true);
+  }
+
   function cerrarModalProgramar() {
     setModalAbierto(false);
-    setErrorForm(null);
+    resetFormulario();
   }
 
   useEscapeKey(modalAbierto, cerrarModalProgramar);
@@ -76,9 +107,10 @@ export function RecurringExpenses({
   // Optimistic UI para eliminaciones y creaciones
   const [recurrentes, setRecurrentesOptimista] = useOptimistic<
     GastoRecurrente[],
-    { accion: "crear" | "eliminar"; item: GastoRecurrente }
+    { accion: "crear" | "actualizar" | "eliminar"; item: GastoRecurrente }
   >(initialGastosRecurrentes, (estado, payload) => {
     if (payload.accion === "crear") return [payload.item, ...estado];
+    if (payload.accion === "actualizar") return estado.map((r) => (r.id === payload.item.id ? payload.item : r));
     if (payload.accion === "eliminar") return estado.filter((r) => r.id !== payload.item.id);
     return estado;
   });
@@ -98,34 +130,45 @@ export function RecurringExpenses({
       setErrorForm("Ingresa un nombre y un monto válido.");
       return;
     }
+    if (!categoriaId) {
+      setErrorForm("Selecciona una categoría.");
+      return;
+    }
 
     setIsSaving(true);
     setErrorForm(null);
 
-    const catId = categoriaId || (categorias.find((c) => c.tipo === "egreso")?.id ?? "");
-
-    const itemOptimista: GastoRecurrente = {
-      id: `opt-${++contadorOptimista}`,
+    const catId = categoriaId;
+    const dia = Math.min(31, Math.max(1, Number(diaCobro)));
+    const payload = {
       nombre: nombre.trim(),
       monto,
-      dia_cobro: Math.min(31, Math.max(1, Number(diaCobro))),
+      dia_cobro: dia,
       categoria_id: catId,
       metodo_pago: metodoPago,
     };
 
     startTransition(async () => {
-      setRecurrentesOptimista({ accion: "crear", item: itemOptimista });
       try {
-        await crearGastoRecurrente({
-          nombre: itemOptimista.nombre,
-          monto: itemOptimista.monto,
-          dia_cobro: itemOptimista.dia_cobro,
-          categoria_id: catId,
-          metodo_pago: metodoPago,
-        });
-        setNombre("");
-        setMontoTexto("");
+        if (editando) {
+          setRecurrentesOptimista({
+            accion: "actualizar",
+            item: { ...editando, ...payload },
+          });
+          await actualizarGastoRecurrente(editando.id, payload);
+        } else {
+          setRecurrentesOptimista({
+            accion: "crear",
+            item: {
+              id: `opt-${++contadorOptimista}`,
+              ...payload,
+            },
+          });
+          await crearGastoRecurrente(payload);
+        }
         setModalAbierto(false);
+        resetFormulario();
+        onListaCambiada?.();
       } catch (err) {
         setErrorForm(err instanceof Error ? err.message : "Error al guardar.");
       } finally {
@@ -135,10 +178,14 @@ export function RecurringExpenses({
   }
 
   function eliminarRecurrente(rec: GastoRecurrente) {
+    if (!confirm(`¿Eliminar la suscripción "${rec.nombre}"? Los cobros ya registrados no se borran.`)) {
+      return;
+    }
     startTransition(async () => {
       setRecurrentesOptimista({ accion: "eliminar", item: rec });
       try {
         await eliminarGastoRecurrente(rec.id);
+        onListaCambiada?.();
       } catch (err) {
         console.error("Error al eliminar gasto recurrente:", err);
       }
@@ -159,10 +206,10 @@ export function RecurringExpenses({
   }
 
   async function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
-    if (procesando.has(rec.id)) return;
+    if (procesando.has(rec.id) || !rec.categoria_id) return;
     setProcesando((prev) => new Set(prev).add(rec.id));
 
-    const catId = rec.categoria_id || (categorias.find((c) => c.tipo === "egreso")?.id ?? "");
+    const catId = rec.categoria_id;
     try {
       await onRegistrarTransaccion({
         categoria_id: catId,
@@ -212,7 +259,7 @@ export function RecurringExpenses({
 
           <GlowButton
             variant="secondary"
-            onClick={() => setModalAbierto(true)}
+            onClick={abrirModalNuevo}
             className="!py-1.5 !px-2.5 !text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -225,7 +272,7 @@ export function RecurringExpenses({
             No tienes pagos recurrentes programados.{" "}
             <button
               type="button"
-              onClick={() => setModalAbierto(true)}
+              onClick={abrirModalNuevo}
               className="text-amber-400 hover:underline"
             >
               ¡Agrega tu Gym, Teléfono o Renta!
@@ -303,6 +350,10 @@ export function RecurringExpenses({
                       <span className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-500 opacity-50 flex items-center gap-1">
                         <Zap className="h-3.5 w-3.5" /> Cobrado
                       </span>
+                    ) : !rec.categoria_id ? (
+                      <span className="px-2 py-1.5 rounded-xl text-[10px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                        Sin categoría
+                      </span>
                     ) : estaProcesando ? (
                       <span className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center gap-1.5">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Procesando…
@@ -331,6 +382,14 @@ export function RecurringExpenses({
                       </div>
                     )}
 
+                    <button
+                      type="button"
+                      onClick={() => abrirModalEditar(rec)}
+                      className="p-1.5 text-slate-500 hover:text-indigo-300 rounded-lg transition-all"
+                      title="Editar suscripción"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => eliminarRecurrente(rec)}
@@ -364,7 +423,7 @@ export function RecurringExpenses({
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h3 id="titulo-programar-recurrente" className="text-sm font-bold text-slate-100 flex items-center gap-2">
                 <Clock className="h-4 w-4 text-amber-400" />
-                Programar Gasto Recurrente
+                {editando ? "Editar suscripción" : "Programar Gasto Recurrente"}
               </h3>
               <button
                 type="button"
@@ -425,15 +484,16 @@ export function RecurringExpenses({
               </div>
 
               {/* Categoría */}
-              {categoriaEgresoDefault && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Categoría</label>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Categoría</label>
+                {categoriaEgresoDefault ? (
                   <select
                     value={categoriaId}
                     onChange={(e) => setCategoriaId(e.target.value)}
+                    required
                     className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-amber-400/60 focus:outline-none appearance-none"
                   >
-                    <option value="">Sin categoría</option>
+                    <option value="">Selecciona una categoría</option>
                     {categorias
                       .filter((c) => c.tipo === "egreso")
                       .map((c) => (
@@ -442,8 +502,12 @@ export function RecurringExpenses({
                         </option>
                       ))}
                   </select>
-                </div>
-              )}
+                ) : (
+                  <p className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-300">
+                    Primero crea una categoría de egreso para poder programar suscripciones.
+                  </p>
+                )}
+              </div>
 
               {/* Método de pago */}
               <div>
@@ -488,13 +552,13 @@ export function RecurringExpenses({
                 <GlowButton type="button" variant="secondary" onClick={cerrarModalProgramar}>
                   Cancelar
                 </GlowButton>
-                <GlowButton type="submit" variant="primary" disabled={isSaving} className="flex-1">
+                <GlowButton type="submit" variant="primary" disabled={isSaving || !categoriaEgresoDefault} className="flex-1">
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <CheckCircle2 className="h-4 w-4" />
                   )}
-                  Guardar
+                  {editando ? "Guardar cambios" : "Guardar"}
                 </GlowButton>
               </div>
             </form>

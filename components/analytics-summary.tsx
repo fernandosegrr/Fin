@@ -1,10 +1,10 @@
 "use client";
 
-import { Calendar, PieChart, Receipt, Activity } from "lucide-react";
+import { Calendar, PieChart, Receipt, Activity, Users } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { formatearMonto } from "@/lib/format";
 import { diasTranscurridosEnMes } from "@/lib/dates";
-import type { EgresoPorCategoria } from "@/lib/types";
+import type { EgresoPorCategoria, IngresoPorCliente } from "@/lib/types";
 
 interface Props {
   /** Ya agregados en el servidor sobre TODO el mes (no sobre la lista recortada a 200 filas). */
@@ -12,6 +12,7 @@ interface Props {
   egresosVariables: number;
   egresosPorCategoria: EgresoPorCategoria[];
   totalEgresos: number;
+  ingresosPorCliente?: IngresoPorCliente[];
   anio: number;
   mes: number;
 }
@@ -21,6 +22,7 @@ export function AnalyticsSummary({
   egresosVariables,
   egresosPorCategoria,
   totalEgresos,
+  ingresosPorCliente = [],
   anio,
   mes,
 }: Props) {
@@ -108,6 +110,23 @@ export function AnalyticsSummary({
           </div>
         </SpotlightCard>
       </div>
+
+      {ingresosPorCliente.length > 0 && (
+        <SpotlightCard className="mt-2.5 p-3 sm:p-4 bg-slate-900/60 border-white/10 rounded-2xl">
+          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold mb-2">
+            <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            Ingresos por cliente / proyecto
+          </div>
+          <div className="space-y-1.5">
+            {ingresosPorCliente.slice(0, 8).map((c) => (
+              <div key={c.cliente_id ?? "sin"} className="flex items-center justify-between text-xs">
+                <span className="truncate text-slate-300">{c.nombre}</span>
+                <span className="font-semibold tabular-nums text-emerald-400 shrink-0 pl-2">{formatearMonto(c.monto)}</span>
+              </div>
+            ))}
+          </div>
+        </SpotlightCard>
+      )}
     </section>
   );
 }

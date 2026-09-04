@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Outfit } from "next/font/google";
+import { RegisterServiceWorker } from "@/components/register-service-worker";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans">
+        <RegisterServiceWorker />
         <div className="mx-auto min-h-dvh w-full max-w-app sm:max-w-desktop bg-[#070a12]">{children}</div>
       </body>
     </html>

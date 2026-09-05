@@ -223,43 +223,43 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
   return (
     <>
-    <section className="pt-3">
+    <section className="pt-2">
       <SpotlightCard
-        spotlightColor={saldoPositivo ? "rgba(16, 185, 129, 0.2)" : "rgba(244, 63, 94, 0.2)"}
-        className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#090d16] border border-white/10 p-4 sm:p-6 rounded-3xl"
+        spotlightColor={saldoPositivo ? "rgba(16, 244, 177, 0.15)" : "rgba(244, 63, 94, 0.15)"}
+        className="relative overflow-hidden bg-gradient-to-br from-slate-900/95 via-slate-900/75 to-slate-950/95 border border-white/[0.08] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/40"
       >
-        {/* Glow tenue de fondo */}
+        {/* Glow sutil de fondo */}
         <div
-          className={`absolute -right-12 -top-12 h-44 w-44 rounded-full blur-3xl opacity-25 pointer-events-none ${
+          className={`absolute -right-16 -top-16 h-52 w-52 rounded-full blur-3xl opacity-20 pointer-events-none transition-all duration-700 ${
             saldoPositivo ? "bg-emerald-500" : "bg-rose-500"
           }`}
         />
 
         {/* Encabezado del Balance */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-              <Wallet className="h-4 w-4" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 shadow-sm shadow-emerald-500/10">
+              <Wallet className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 block leading-none">
+              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block leading-tight">
                 Saldo Total Disponible
               </span>
-              <span className="text-[9px] text-slate-400 font-medium">
-                (Acumulado histórico + Flujo del mes)
+              <span className="text-[10px] text-slate-500 font-medium">
+                Patrimonio líquido acumulado
               </span>
             </div>
           </div>
 
           {/* Badge de Tasa de Ahorro */}
-          <div className="flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs font-semibold text-emerald-400 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300 backdrop-blur-md shrink-0 shadow-sm shadow-emerald-500/10">
             <PiggyBank className="h-3.5 w-3.5" />
             <span>{tasaAhorro}% ahorrado</span>
           </div>
         </div>
 
         {/* Monto principal: Saldo Total Disponible Acumulado */}
-        <div className="mt-3 flex items-baseline gap-2">
+        <div className="mt-4 flex items-baseline gap-2">
           <div
             className={`text-3xl sm:text-5xl font-black tracking-tight tabular-nums ${
               saldoPositivo ? "text-slate-100" : "text-rose-400"
@@ -271,62 +271,62 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
         {/* Linea de Arrastre de Meses Anteriores */}
         {actual.saldoInicial !== 0 && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-medium text-indigo-300">
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-indigo-300">
             <History className="h-3.5 w-3.5 text-indigo-400" />
             <span>Arrastre meses anteriores: <strong>{formatearMonto(actual.saldoInicial)}</strong></span>
           </div>
         )}
 
         {/* Grid de Egresos e Ingresos del Mes */}
-        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 pt-3 border-t border-white/10">
+        <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.07]">
           {/* Egresos */}
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-950/30 p-2.5 sm:p-3.5 backdrop-blur-sm">
-            <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-rose-400">
-              <ArrowDownRight className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+          <div className="rounded-2xl border border-rose-500/20 bg-rose-950/20 p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-rose-500/35">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+              <ArrowDownRight className="h-4 w-4 text-rose-500 shrink-0" />
               <span className="truncate">Egresos del Mes</span>
             </div>
-            <p className="mt-1 text-base sm:text-xl font-bold tabular-nums text-slate-100 truncate">
+            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-slate-100 truncate">
               <AnimatedNumber value={actual.egresos} />
             </p>
           </div>
 
           {/* Ingresos */}
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/30 p-2.5 sm:p-3.5 backdrop-blur-sm">
-            <div className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-emerald-400">
-              <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-emerald-500/35">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+              <ArrowUpRight className="h-4 w-4 text-emerald-500 shrink-0" />
               <span className="truncate">Ingresos del Mes</span>
             </div>
-            <p className="mt-1 text-base sm:text-xl font-bold tabular-nums text-slate-100 truncate">
+            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-slate-100 truncate">
               <AnimatedNumber value={actual.ingresos} />
             </p>
           </div>
         </div>
 
-        {/* Desglose por Método de Pago: Efectivo vs Tarjeta / Banco (saldo acumulado real) */}
-        <div className="mt-3 pt-3 border-t border-white/10">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {/* Desglose por Método de Pago: Efectivo vs Tarjeta / Banco */}
+        <div className="mt-4 pt-4 border-t border-white/[0.07]">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
               Saldo por método de pago
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={abrirModalAjuste}
-                className="flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 hover:text-white transition-all shadow-sm"
               >
-                <Scale className="h-3.5 w-3.5" /> Ajustar
+                <Scale className="h-3 w-3" /> Ajustar
               </button>
               <button
                 type="button"
                 onClick={abrirModalTransferencia}
-                className="flex items-center gap-1 text-[11px] font-semibold text-indigo-300 hover:text-indigo-200 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-all shadow-sm"
               >
-                <ArrowRightLeft className="h-3.5 w-3.5" /> Transferir
+                <ArrowRightLeft className="h-3 w-3" /> Transferir
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="grid grid-cols-2 gap-2.5 text-[11px]">
             <DesgloseMetodo
               icono={<Banknote className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
               etiqueta="Efectivo"
@@ -342,7 +342,7 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
         {/* Referencia del mes anterior */}
         {anterior.balance !== 0 && (
-          <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="mt-4 pt-3 border-t border-white/[0.05] flex items-center justify-between text-[11px] text-slate-400">
             <span>Mes anterior ({anterior.nombreMes}):</span>
             <span className="font-semibold tabular-nums text-slate-300">
               {formatearMonto(anterior.balance)}

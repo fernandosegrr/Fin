@@ -25,14 +25,14 @@ interface Props {
 }
 
 const PALETTE = [
+  "#10b981", // emerald
+  "#8b5cf6", // violet
+  "#06b6d4", // cyan
+  "#f43f5e", // rose
+  "#f59e0b", // amber
   "#6366f1", // indigo
   "#ec4899", // pink
   "#14b8a6", // teal
-  "#f59e0b", // amber
-  "#8b5cf6", // violet
-  "#3b82f6", // blue
-  "#ef4444", // red
-  "#10b981", // emerald
 ];
 
 export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosTotales }: Props) {
@@ -47,30 +47,33 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
   ];
 
   return (
-    <section className="mt-6">
-      <SpotlightCard className="bg-slate-900/60 border-white/10 p-5 rounded-3xl">
+    <section className="mt-4">
+      <SpotlightCard
+        spotlightColor="rgba(6, 182, 212, 0.12)"
+        className="bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/30"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-              {activeTab === "pie" ? <PieIcon className="h-4 w-4" /> : <BarChart3 className="h-4 w-4" />}
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 shadow-sm shadow-cyan-500/10">
+              {activeTab === "pie" ? <PieIcon className="h-5 w-5" /> : <BarChart3 className="h-5 w-5" />}
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-100">
-                {activeTab === "pie" ? "¿En qué se fue tu dinero?" : "Lo que entra y lo que sale"}
+              <h3 className="text-base sm:text-lg font-black text-slate-100">
+                {activeTab === "pie" ? "¿En qué se fue tu dinero?" : "Flujo Comparativo del Mes"}
               </h3>
-              <p className="text-sm text-slate-400">Una mirada al mes seleccionado</p>
+              <p className="text-xs text-slate-400 mt-0.5">Métricas del periodo visualizado</p>
             </div>
           </div>
 
-          {/* Switch de pestaña */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-white/5">
+          {/* Switch de pestaña segmentado */}
+          <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs">
             <button
               type="button"
               onClick={() => setActiveTab("pie")}
               aria-pressed={activeTab === "pie"}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
                 activeTab === "pie"
-                  ? "bg-emerald-300 text-emerald-950"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
                   : "text-slate-400 hover:text-white"
               }`}
             >
@@ -80,13 +83,13 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
               type="button"
               onClick={() => setActiveTab("bar")}
               aria-pressed={activeTab === "bar"}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
                 activeTab === "bar"
-                  ? "bg-emerald-300 text-emerald-950"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              Flujo
+              Flujo de Efectivo
             </button>
           </div>
         </div>

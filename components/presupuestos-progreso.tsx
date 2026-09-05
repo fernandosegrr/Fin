@@ -48,15 +48,61 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
   return (
     <>
       <section>
-        <div className="budget-overview mb-7">
-          <div><p className="eyebrow">TU PLAN DEL MES</p><p className="text-3xl sm:text-4xl font-semibold tabular-nums tracking-tight mt-3">{formatearMonto(limiteTotal)}</p><p className="text-sm text-slate-400 mt-2">en {conLimite.length} categorías con límite</p></div>
-          <div><p className="text-sm text-slate-400">Gastado en esas categorías</p><p className="text-2xl font-semibold tabular-nums mt-2">{formatearMonto(gastoTotal)}</p></div>
-          <div><p className="text-sm text-slate-400">Margen total</p><p className={`text-2xl font-semibold tabular-nums mt-2 ${limiteTotal < gastoTotal ? "text-rose-300" : "text-emerald-300"}`}>{formatearMonto(limiteTotal - gastoTotal)}</p></div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
+          <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Presupuesto Asignado</p>
+              <Target className="h-4 w-4 text-cyan-400" />
+            </div>
+            <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 text-slate-100">
+              {formatearMonto(limiteTotal)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">En {conLimite.length} categorías con límite</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Gastado</p>
+              <span className="text-xs font-bold text-rose-400 tabular-nums">
+                {limiteTotal > 0 ? `${Math.round((gastoTotal / limiteTotal) * 100)}%` : "0%"}
+              </span>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 text-slate-100">
+              {formatearMonto(gastoTotal)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">En categorías con límite fijado</p>
+          </div>
+
+          <div className={`rounded-2xl border p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20 ${
+            limiteTotal < gastoTotal
+              ? "border-rose-500/20 bg-gradient-to-br from-rose-950/20 to-slate-950/90"
+              : "border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 to-slate-950/90"
+          }`}>
+            <div className="flex items-center justify-between">
+              <p className={`text-xs font-bold uppercase tracking-wider ${
+                limiteTotal < gastoTotal ? "text-rose-400" : "text-emerald-400"
+              }`}>
+                Margen Disponible
+              </p>
+              <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                limiteTotal < gastoTotal ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"
+              }`}>
+                {limiteTotal < gastoTotal ? "Excedido" : "Bajo control"}
+              </span>
+            </div>
+            <p className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 ${
+              limiteTotal < gastoTotal ? "text-rose-400" : "text-emerald-300"
+            }`}>
+              {formatearMonto(limiteTotal - gastoTotal)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">Colchón antes de exceder el límite</p>
+          </div>
         </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-2 min-w-0">
             <Target className="h-4 w-4 text-emerald-400 shrink-0" />
-            <h2 className="text-lg font-semibold text-slate-200">Límites por categoría</h2>
+            <h2 className="text-base sm:text-lg font-black text-slate-100">Límites por categoría</h2>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">

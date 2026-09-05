@@ -1,12 +1,10 @@
 "use client";
 
-import { parsearMonto } from "@/lib/format";
-
 import { useState } from "react";
-import { Flag, Pencil, Trash2, X, Loader2, Check } from "lucide-react";
+import { Flag, Pencil, Trash2, X, Loader2, Target, Check } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto } from "@/lib/format";
+import { formatearMonto, parsearMonto } from "@/lib/format";
 import { useEscapeKey } from "@/lib/use-escape-key";
 import { eliminarMetaAhorro, guardarMetaAhorro } from "@/app/dashboard/actions";
 import type { MetaAhorro } from "@/lib/types";
@@ -73,67 +71,98 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
 
   return (
     <>
-      <SpotlightCard className="bg-slate-900/60 border-white/10 p-5 rounded-3xl">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-              <Flag className="h-4 w-4" />
+      <SpotlightCard
+        spotlightColor="rgba(139, 92, 246, 0.15)"
+        className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/30"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 border border-violet-500/25 text-violet-400 shrink-0 shadow-sm shadow-violet-500/10">
+              <Flag className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-slate-100 truncate">
-                {meta ? meta.nombre : "Meta de ahorro"}
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-violet-300 block">
+                Propósito de Ahorro
+              </span>
+              <h3 className="text-sm sm:text-base font-bold text-slate-100 truncate mt-0.5">
+                {meta ? meta.nombre : "Define tu meta"}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                {meta
-                  ? meta.fecha_limite
-                    ? `Objetivo ${formatearMonto(objetivo)} · para el ${meta.fecha_limite}`
-                    : `Objetivo ${formatearMonto(objetivo)}`
-                  : "Define cuánto quieres reunir."}
-              </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {meta && (
-              <button type="button" onClick={borrar} className="p-1.5 text-slate-500 hover:text-rose-400" title="Quitar meta">
-                <Trash2 className="h-3.5 w-3.5" />
+              <button
+                type="button"
+                onClick={borrar}
+                className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                title="Quitar meta"
+              >
+                <Trash2 className="h-4 w-4" />
               </button>
             )}
-            <button type="button" onClick={abrir} className="p-1.5 text-slate-500 hover:text-emerald-400" title="Editar meta">
-              <Pencil className="h-3.5 w-3.5" />
+            <button
+              type="button"
+              onClick={abrir}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              title={meta ? "Editar meta" : "Crear meta"}
+            >
+              <Pencil className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         {meta ? (
-          <>
-            <p className="mt-6 text-3xl font-semibold tracking-tight tabular-nums">{porcentaje}<span className="text-lg text-slate-400">% de tu objetivo</span></p>
-            <p className="text-xs text-slate-400 mt-2">Referencia con tu saldo disponible; no es dinero apartado.</p>
-            <div role="progressbar" aria-label="Avance de la meta" aria-valuenow={porcentaje} aria-valuemin={0} aria-valuemax={100} className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-slate-950 border border-white/5 p-0.5">
+          <div className="mt-5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-slate-100">
+                {porcentaje}%
+              </span>
+              <span className="text-xs font-semibold text-slate-400">
+                Objetivo: <strong className="text-slate-200">{formatearMonto(objetivo)}</strong>
+              </span>
+            </div>
+
+            {/* Barra de progreso con resplandor neón */}
+            <div
+              role="progressbar"
+              aria-label="Avance de la meta"
+              aria-valuenow={porcentaje}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mt-3.5 h-3 w-full overflow-hidden rounded-full bg-slate-950/80 border border-white/[0.06] p-0.5"
+            >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-700"
+                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 transition-all duration-700 shadow-[0_0_10px_rgba(139,92,246,0.5)]"
                 style={{ width: `${porcentaje}%` }}
               />
             </div>
-            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-              <span className="tabular-nums font-semibold text-slate-200">{porcentaje}%</span>
-              <span>
-                {restante > 0
-                  ? `Faltan ${formatearMonto(restante)}`
-                  : "¡Ya alcanzaste la meta!"}
+
+            <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="font-medium">
+                {meta.fecha_limite ? `Límite: ${meta.fecha_limite}` : "Sin fecha límite"}
+              </span>
+              <span className="font-semibold text-slate-200">
+                {restante > 0 ? `Faltan ${formatearMonto(restante)}` : "¡Meta alcanzada! 🎉"}
               </span>
             </div>
-          </>
+          </div>
         ) : (
-          <button
-            type="button"
-            onClick={abrir}
-            className="mt-3 w-full rounded-2xl border border-dashed border-white/15 py-2 text-xs font-semibold text-emerald-400 hover:border-emerald-400/40"
-          >
-            Crear meta
-          </button>
+          <div className="mt-4 pt-3 border-t border-white/[0.06] text-center">
+            <p className="text-xs text-slate-400 mb-3">
+              Vincula un objetivo financiero a tu saldo disponible para medir tu avance.
+            </p>
+            <button
+              type="button"
+              onClick={abrir}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-xs font-bold text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/10 transition-all"
+            >
+              <Target className="h-4 w-4" /> Establecer meta de ahorro
+            </button>
+          </div>
         )}
       </SpotlightCard>
 
+      {/* Modal de edición de meta */}
       {modalAbierto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
@@ -141,57 +170,77 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
             if (e.target === e.currentTarget) setModalAbierto(false);
           }}
         >
-          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                <Flag className="h-4 w-4 text-emerald-400" /> Meta de ahorro
+                <Flag className="h-4 w-4 text-violet-400" /> Meta de ahorro
               </h3>
-              <button type="button" onClick={() => setModalAbierto(false)} aria-label="Cerrar" className="p-1.5 text-slate-400 hover:text-white">
+              <button
+                type="button"
+                onClick={() => setModalAbierto(false)}
+                aria-label="Cerrar"
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={guardar} className="mt-4 space-y-3">
+            <form onSubmit={guardar} className="mt-4 space-y-3.5">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Nombre</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Nombre</label>
                 <input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej. Fondo de emergencia"
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
-                  required
+                  placeholder="Ej. Fondo de emergencia, Viaje..."
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-400/60 focus:outline-none"
                 />
               </div>
+
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Monto objetivo</label>
-                <div className="flex items-center rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 focus-within:border-emerald-400/60">
-                  <span className="text-slate-400 mr-2">$</span>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Monto objetivo</label>
+                <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-violet-400/60">
+                  <span className="text-lg font-bold text-slate-400 mr-2">$</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={montoTexto}
                     onChange={(e) => setMontoTexto(e.target.value)}
-                    placeholder="15000"
-                    className="w-full bg-transparent text-sm font-bold text-slate-100 focus:outline-none"
-                    required
+                    placeholder="25000"
+                    className="w-full bg-transparent text-xl font-bold text-slate-100 placeholder:text-slate-700 focus:outline-none tabular-nums"
                   />
                 </div>
               </div>
+
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Fecha límite (opcional)</label>
+                <label className="block text-xs font-medium text-slate-400 mb-1">
+                  Fecha límite (opcional)
+                </label>
                 <input
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-emerald-400/60 focus:outline-none"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-violet-400/60 focus:outline-none"
                 />
               </div>
+
               {error && (
-                <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">{error}</p>
+                <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+                  {error}
+                </p>
               )}
-              <GlowButton type="submit" variant="primary" disabled={guardando} className="w-full">
-                {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Guardar meta
-              </GlowButton>
+
+              <div className="flex gap-2 pt-2">
+                <GlowButton type="button" variant="secondary" onClick={() => setModalAbierto(false)}>
+                  Cancelar
+                </GlowButton>
+                <GlowButton type="submit" variant="primary" disabled={guardando} className="flex-1">
+                  {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Guardar meta
+                </GlowButton>
+              </div>
             </form>
           </div>
         </div>

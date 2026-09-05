@@ -95,53 +95,67 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="titulo-historial"
-        className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-2xl max-h-[88dvh] flex flex-col"
+        className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-white/[0.08] bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl max-h-[88dvh] flex flex-col"
       >
-        <div className="flex items-center justify-between pb-3 border-b border-white/10">
-          <h2 id="titulo-historial" className="text-sm font-bold text-slate-100 flex items-center gap-2">
-            <Search className="h-4 w-4 text-emerald-400" /> Historial
+        <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.08]">
+          <h2 id="titulo-historial" className="text-base font-black text-slate-100 flex items-center gap-2">
+            <Search className="h-4 w-4 text-emerald-400" /> Historial Completo
           </h2>
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="p-1.5 text-slate-400 hover:text-white">
-            <X className="h-4 w-4" />
+          <button
+            type="button"
+            onClick={onCerrar}
+            aria-label="Cerrar"
+            className="rounded-xl p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-2.5">
           <div className="relative">
-            <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-500" />
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
             <input
               autoFocus
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por descripción, categoría o cliente..."
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/70 pl-10 pr-4 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/60 focus:outline-none"
+              className="w-full rounded-2xl border border-white/[0.08] bg-slate-950/80 pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/50 focus:outline-none transition-colors"
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {(["todos", "egreso", "ingreso"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTipo(t)}
-                className={`px-2.5 py-1 rounded-lg text-xs ${
-                  tipo === t ? "bg-slate-800 text-white font-semibold" : "text-slate-400 bg-slate-950 border border-white/5"
-                }`}
-              >
-                {t === "todos" ? "Todos" : t === "egreso" ? "Egresos" : "Ingresos"}
-              </button>
-            ))}
-            {(["todos", "tarjeta", "efectivo"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMetodo(m)}
-                className={`px-2.5 py-1 rounded-lg text-xs ${
-                  metodo === m ? "bg-slate-800 text-white font-semibold" : "text-slate-400 bg-slate-950 border border-white/5"
-                }`}
-              >
-                {m === "todos" ? "Cuentas" : m === "tarjeta" ? "Tarjeta" : "Efectivo"}
-              </button>
-            ))}
+            <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs font-bold">
+              {(["todos", "egreso", "ingreso"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTipo(t)}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    tipo === t
+                      ? "bg-slate-800 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {t === "todos" ? "Todos" : t === "egreso" ? "Egresos" : "Ingresos"}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs font-bold">
+              {(["todos", "tarjeta", "efectivo"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMetodo(m)}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    metodo === m
+                      ? "bg-slate-800 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {m === "todos" ? "Cuentas" : m === "tarjeta" ? "Tarjeta" : "Efectivo"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

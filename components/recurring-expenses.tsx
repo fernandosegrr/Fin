@@ -257,22 +257,57 @@ export function RecurringExpenses({
 
   return (
     <section>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        {[{ label: "Programado al mes", amount: totalProgramado }, { label: "Marcado como registrado", amount: totalRegistrado }, { label: "Pendiente de registrar", amount: totalProgramado - totalRegistrado }].map(item => <div key={item.label} className="metric-card"><p className="text-sm text-slate-400">{item.label}</p><p className="text-2xl font-semibold tabular-nums mt-3">{formatearMonto(item.amount)}</p></div>)}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
+        <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Comprometido</p>
+            <Clock className="h-4 w-4 text-violet-400" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 text-slate-100">
+            {formatearMonto(totalProgramado)}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">Suma mensual de suscripciones fijas</p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/20 to-slate-950/90 p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">Ya Pagado</p>
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 text-emerald-300">
+            {formatearMonto(totalRegistrado)}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">Cobros marcados en {nombreMesVisto}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/20">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Por Cubrir</p>
+            <Zap className="h-4 w-4 text-amber-400" />
+          </div>
+          <p className="text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 text-amber-300">
+            {formatearMonto(Math.max(0, totalProgramado - totalRegistrado))}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">Restante estimado este mes</p>
+        </div>
       </div>
-      <SpotlightCard className="bg-slate-900/60 border-white/10 p-4 sm:p-5 rounded-3xl">
+
+      <SpotlightCard
+        spotlightColor="rgba(139, 92, 246, 0.12)"
+        className="bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/30"
+      >
         <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-              <Clock className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 shadow-sm shadow-amber-500/10">
+              <Clock className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-100 leading-none">
+              <h2 className="text-base sm:text-lg font-black text-slate-100 leading-none">
                 Tus pagos programados
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {recurrentes.length} programado{recurrentes.length !== 1 ? "s" : ""} · cobros de{" "}
-                <span className="font-semibold text-slate-300">{nombreMesVisto}</span>
+              <p className="text-xs text-slate-400 mt-1">
+                {recurrentes.length} suscripción{recurrentes.length !== 1 ? "es" : ""} · compromisos de{" "}
+                <span className="font-bold text-slate-200">{nombreMesVisto}</span>
               </p>
             </div>
           </div>
@@ -280,7 +315,7 @@ export function RecurringExpenses({
           <GlowButton
             variant="primary"
             onClick={abrirModalNuevo}
-            className="!py-1.5 !px-2.5 !text-xs"
+            className="!py-1.5 !px-3 !text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             Programar
@@ -310,7 +345,7 @@ export function RecurringExpenses({
               return (
                 <div
                   key={rec.id}
-                  className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-[#101720] border border-white/10 hover:border-white/20 transition-colors"
+                  className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-slate-950/60 border border-white/[0.06] hover:border-white/[0.16] hover:bg-slate-900/60 transition-all shadow-sm"
                 >
                   <div className="min-w-0 pr-2">
                     <div className="flex items-center gap-1.5 flex-wrap">

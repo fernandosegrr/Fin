@@ -3,25 +3,19 @@
 @tailwind utilities;
 
 @layer base {
-  /* El destello BLANCO al abrir la PWA salía de aquí: el splash de Android/iOS
-     usa background_color del manifest (#070a12, oscuro), pero en cuanto lo
-     quita, el navegador pinta el lienzo del documento —que es <html>, no
-     <body>— y sin fondo propio eso es blanco. Se veía "negro → blanco → app".
-     Poner el color en <html> (y color-scheme: dark, para que también sean
-     oscuros los scrollbars y el overscroll) elimina el hueco por completo. */
   html {
-    background-color: #070a12;
+    background-color: #06080f;
     color-scheme: dark;
   }
 
   body {
-    @apply bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white;
+    @apply bg-[#06080f] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white;
     font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-/* Scrollbar personalizado súper discreto */
+/* Scrollbar ultrafino y elegante */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -30,16 +24,16 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Date input custom styling */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) opacity(0.4);
+  filter: invert(1) opacity(0.5);
   cursor: pointer;
 }
 
@@ -53,58 +47,194 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-:root { --surface: #101720; --line: rgba(148,163,184,.14); }
-.budget-overview { display: grid; grid-template-columns: 1.3fr 1fr 1fr; align-items: center; gap: 24px; padding: 28px; background: linear-gradient(110deg, #15382d, #101b23); border: 1px solid #29433a; border-radius: 20px; }
-.dashboard-shell section { min-width: 0; }
-.dashboard-shell .overview-grid > * { min-width: 0; }
-.advisor-panel { box-shadow: 0 20px 80px #0002; }
-.login-layout { background: radial-gradient(ellipse at 15% 45%, #10352755, transparent 55%); }
+:root {
+  --bg-cosmic: #06080f;
+  --surface: #0c111d;
+  --surface-elevated: #111827;
+  --surface-glass: rgba(15, 23, 42, 0.65);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-highlight: rgba(16, 185, 129, 0.25);
+}
+
+/* Ambient glow & glass panels */
+.ambient-cosmic {
+  background-image: 
+    radial-gradient(ellipse 60% 40% at 20% -10%, rgba(16, 185, 129, 0.08), transparent 60%),
+    radial-gradient(ellipse 50% 35% at 85% 10%, rgba(139, 92, 246, 0.07), transparent 50%);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.7) 0%, rgba(11, 15, 26, 0.8) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-card-hover {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+.glass-card-hover:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.finance-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, rgba(16, 23, 38, 0.75), rgba(9, 13, 22, 0.85));
+  backdrop-filter: blur(20px);
+}
+
+.dashboard-shell {
+  min-height: 100dvh;
+  padding: 0 16px calc(96px + env(safe-area-inset-bottom));
+  max-width: 1560px;
+  margin: auto;
+}
+
+.desktop-sidebar {
+  display: none;
+}
+
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 0 16px;
+}
+
+.page-heading h2 {
+  font-size: clamp(26px, 2.5vw, 34px);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-top: 4px;
+}
+
+.eyebrow {
+  color: #34d399;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.metric-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.75), rgba(11, 17, 28, 0.85));
+  backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+}
+.metric-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.overview-grid {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+.overview-grid > section {
+  padding-top: 0;
+}
+
+/* Accessibility & UI focus states */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 20px;
+  z-index: 100;
+  padding: 10px 18px;
+  background: #10b981;
+  color: #04130d;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: top 0.2s;
+}
+.skip-link:focus {
+  top: 14px;
+}
+
+/* Modal accessibility */
+.dashboard-shell [role="dialog"],
+body [role="dialog"] {
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Responsive adjustments */
 @media (max-width: 639px) {
- .budget-overview { grid-template-columns: 1fr; gap: 20px; padding: 22px; }
- .metric-card { padding: 16px 20px; }
- .metric-card > p:nth-child(2) { margin-top: 8px; }
- .login-panel { padding: 26px 22px; }
- .dashboard-shell input, .dashboard-shell select, .dashboard-shell textarea, .login-panel input { font-size: 16px; }
+  .metric-card {
+    padding: 16px;
+  }
+  .dashboard-shell input,
+  .dashboard-shell select,
+  .dashboard-shell textarea {
+    font-size: 16px; /* Prevents iOS auto-zoom on input focus */
+  }
 }
-.finance-card { border-radius: 20px; border-color: var(--line); box-shadow: none; }
-.dashboard-shell .text-slate-500 { color: #8493a7; }
-.dashboard-shell input, .dashboard-shell select, .dashboard-shell textarea { min-height: 40px; }
-.dashboard-shell [role="dialog"] { max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #6ee7b7; outline-offset: 4px; }
-button:disabled { cursor: not-allowed; opacity: .5; }
-.skip-link { position: fixed; top: -100px; left: 20px; z-index: 100; padding: 12px 20px; background: #6ee7b7; color: #07120d; border-radius: 12px; }
-.skip-link:focus { top: 12px; }
-.dashboard-shell { min-height: 100dvh; padding: 0 20px calc(100px + env(safe-area-inset-bottom)); max-width: 1600px; margin: auto; }
-.desktop-sidebar { display: none; }
-.page-heading { display: flex; flex-direction: column; gap: 22px; padding: 30px 0; }
-.page-heading h2 { font-size: clamp(28px, 3vw, 38px); line-height: 1.2; font-weight: 600; letter-spacing: -.035em; margin-top: 8px; }
-.eyebrow { color: #94a3b8; font-size: 10px; letter-spacing: .18em; font-weight: 600; }
-.metric-card { padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(120deg, #131d29, #0d141d); }
-.overview-grid { display: grid; gap: 20px; align-items: start; }
-.overview-grid > section { padding-top: 0; }
-.sidebar-brand { display: flex; gap: 10px; align-items: center; font-size: 26px; letter-spacing: -.05em; font-weight: 600; }
-.brand-mark { display: grid; place-items: center; background: #b8f3d2; color: #10251b; height: 38px; width: 38px; border-radius: 12px; font-size: 28px; }
-.brand-tag { font-size: 9px; letter-spacing: .1em; border: 1px solid #334155; padding: 3px 5px; border-radius: 5px; color: #94a3b8; }
-.sidebar-caption { font-size: 9px; letter-spacing: .15em; color: #64748b; margin: 56px 0 20px 12px; }
-.sidebar-link { display: flex; width: 100%; align-items: center; gap: 12px; padding: 14px 12px; border-radius: 12px; color: #94a3b8; font-size: 14px; text-align: left; }
-.sidebar-link:hover { background: #18212b; color: #e2e8f0; }
-.sidebar-link.is-active { background: #163127; color: #b8f3d2; }
-.sidebar-note { margin-top: auto; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #101b20; }
-.login-layout { min-height: 100dvh; display: grid; align-items: center; max-width: 1200px; margin: auto; padding: 32px 24px; gap: 48px; }
-.login-story { display: none; }
-.login-panel { width: 100%; max-width: 440px; margin: auto; padding: 32px; background: #101720; border: 1px solid var(--line); border-radius: 24px; }
+
 @media (min-width: 640px) {
- .page-heading { flex-direction: row; align-items: center; justify-content: space-between; }
- .dashboard-shell { padding-left: 32px; padding-right: 32px; }
+  .page-heading {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .dashboard-shell {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
 }
+
 @media (min-width: 1024px) {
- .dashboard-shell { padding: 0 40px 48px 280px; }
- .desktop-sidebar { display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; width: 232px; margin-left: -272px; padding: 32px 16px; border-right: 1px solid var(--line); background: #0b1119; z-index: 40; }
- .dashboard-header { min-height: 80px; }
- .overview-grid { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
- .login-layout { grid-template-columns: 1.1fr 1fr; }
- .login-story { display: block; }
+  .dashboard-shell {
+    padding: 0 36px 40px 270px;
+  }
+  .desktop-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 240px;
+    margin-left: -270px;
+    padding: 28px 16px;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, #090e18 0%, #060910 100%);
+    backdrop-filter: blur(24px);
+    z-index: 40;
+  }
+  .dashboard-header {
+    min-height: 72px;
+  }
+  .overview-grid {
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
- *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

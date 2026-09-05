@@ -80,77 +80,77 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategori
         if (e.target === e.currentTarget) onCerrar();
       }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="titulo-gestion-categorias"
-        className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <div>
-            <h2 id="titulo-gestion-categorias" className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-indigo-400" />
-              Gestión de Categorías
-            </h2>
-            <p className="text-xs text-slate-400">
-              Crea o elimina categorías para tus ingresos y gastos.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCerrar}
-            aria-label="Cerrar"
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {error && (
-          <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
-            {error}
-          </div>
-        )}
-
-        {/* Formulario para agregar */}
-        <div className="mt-4 p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-            Nueva Categoría
-          </h3>
-
-          <div>
-            <input
-              type="text"
-              placeholder="Nombre (ej. Gimnasio, Freelance...)"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="w-full rounded-xl bg-slate-800/80 border border-white/10 px-3.5 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {/* Tipo */}
-            <div className="flex rounded-xl bg-slate-900 p-1 border border-white/5">
-              <button
-                type="button"
-                onClick={() => setTipo("egreso")}
-                className={`flex-1 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  tipo === "egreso" ? "bg-rose-600 text-white" : "text-slate-400"
-                }`}
-              >
-                Egreso
-              </button>
-              <button
-                type="button"
-                onClick={() => setTipo("ingreso")}
-                className={`flex-1 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  tipo === "ingreso" ? "bg-emerald-600 text-white" : "text-slate-400"
-                }`}
-              >
-                Ingreso
-              </button>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titulo-gestion-categorias"
+          className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col max-h-[85vh]"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+            <div>
+              <h2 id="titulo-gestion-categorias" className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
+                <Layers className="h-5 w-5 text-indigo-400" />
+                Gestión de Categorías
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Crea o elimina categorías para clasificar tus ingresos y gastos.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={onCerrar}
+              aria-label="Cerrar"
+              className="rounded-xl p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
+              {error}
+            </div>
+          )}
+
+          {/* Formulario para agregar */}
+          <div className="mt-4 p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] space-y-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Nueva Categoría
+            </h3>
+
+            <div>
+              <input
+                type="text"
+                placeholder="Nombre (ej. Gimnasio, Freelance...)"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="w-full rounded-2xl bg-slate-950/90 border border-white/[0.08] px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-400/60 focus:outline-none transition-colors"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {/* Tipo */}
+              <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => setTipo("egreso")}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    tipo === "egreso" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Egreso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipo("ingreso")}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    tipo === "ingreso" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Ingreso
+                </button>
+              </div>
 
             {/* Grupo (solo si es Egreso) */}
             {tipo === "egreso" ? (

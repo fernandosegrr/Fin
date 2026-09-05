@@ -155,14 +155,14 @@ export function TransactionCaptureModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-captura-transaccion"
-          className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden"
+          className="w-full max-w-md rounded-3xl border border-white/[0.08] bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h2 id="titulo-captura-transaccion" className="text-base font-bold text-slate-100 flex items-center gap-2">
+          <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.08]">
+            <h2 id="titulo-captura-transaccion" className="text-base font-black text-slate-100 flex items-center gap-2">
               {esEdicion ? (
                 <>
-                  <Pencil className="h-4 w-4 text-indigo-400" />
+                  <Pencil className="h-4 w-4 text-cyan-400" />
                   Editar Movimiento
                 </>
               ) : (
@@ -176,7 +176,7 @@ export function TransactionCaptureModal({
               type="button"
               onClick={onCerrar}
               aria-label="Cerrar"
-              className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+              className="rounded-xl p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -184,13 +184,13 @@ export function TransactionCaptureModal({
 
           <form onSubmit={manejarEnvio} className="mt-4 space-y-4">
             {/* Toggle Ingreso / Egreso */}
-            <div className="flex rounded-2xl bg-slate-950 p-1.5 border border-white/5">
+            <div className="flex rounded-2xl bg-slate-950/80 p-1.5 border border-white/[0.06]">
               <button
                 type="button"
                 onClick={() => cambiarTipo("egreso")}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                   tipo === "egreso"
-                    ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -201,7 +201,7 @@ export function TransactionCaptureModal({
                 onClick={() => cambiarTipo("ingreso")}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                   tipo === "ingreso"
-                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -209,7 +209,7 @@ export function TransactionCaptureModal({
               </button>
             </div>
 
-            {/* Selector de Método / Cuenta (Efectivo vs Tarjeta/Banco) */}
+            {/* Selector de Método / Cuenta */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">
                 Cuenta / Método de Pago
@@ -218,10 +218,10 @@ export function TransactionCaptureModal({
                 <button
                   type="button"
                   onClick={() => setMetodoPago("tarjeta")}
-                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-bold ${
                     metodoPago === "tarjeta"
-                      ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm"
-                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                      ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-sm"
+                      : "bg-slate-950/60 border-white/[0.05] text-slate-400 hover:text-white"
                   }`}
                 >
                   <CreditCard className="h-4 w-4 text-cyan-400" />
@@ -230,10 +230,10 @@ export function TransactionCaptureModal({
                 <button
                   type="button"
                   onClick={() => setMetodoPago("efectivo")}
-                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
+                  className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-bold ${
                     metodoPago === "efectivo"
-                      ? "bg-amber-600/20 border-amber-500 text-amber-300 shadow-sm"
-                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                      ? "bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-sm"
+                      : "bg-slate-950/60 border-white/[0.05] text-slate-400 hover:text-white"
                   }`}
                 >
                   <Banknote className="h-4 w-4 text-amber-400" />

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { BrandLogo } from "./brand-logo";
 import { DashboardNavigation, sections } from "./dashboard-navigation";
 import { MonthInsights } from "./month-insights";
 import { LogOut, Search } from "lucide-react";
@@ -351,14 +352,14 @@ export function DashboardContainer({
           paddingTop: "max(0.75rem, calc(0.5rem + env(safe-area-inset-top, 0px)))",
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="brand-mark lg:hidden" aria-hidden="true">n.</span>
+        <div className="flex items-center gap-3">
+          <BrandLogo variant="compact" withLink className="lg:hidden" />
           <div>
-            <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
-              <span className="lg:hidden">NexFin Pro</span><span className="hidden lg:inline text-slate-300 font-medium">Mi espacio financiero</span>
+            <h1 className="hidden lg:flex items-center gap-2 text-sm font-bold text-slate-200 leading-none">
+              <span>Mi espacio financiero</span>
             </h1>
             <p
-              className={`text-[10px] mt-0.5 flex items-center gap-1 font-medium ${
+              className={`text-[10px] mt-0.5 lg:mt-1 flex items-center gap-1.5 font-semibold ${
                 estadoConexion === "vivo" ? "text-emerald-400" : "text-slate-500"
               }`}
             >

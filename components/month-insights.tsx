@@ -1,13 +1,90 @@
-import { ArrowDownLeft, ArrowUpRight, Activity } from "lucide-react";
+"use client";
+
+import { TrendingUp, TrendingDown, ShieldCheck, Zap, Activity } from "lucide-react";
 import type { BalanceMensual } from "@/app/dashboard/actions";
 import { formatearMonto } from "@/lib/format";
 
 export function MonthInsights({ actual }: { actual: BalanceMensual["actual"] }) {
-  const neto = actual.ingresos - actual.egresos;
-  const items = [
-    { label: "Ingresos del mes", amount: actual.ingresos, detail: "Todo lo que recibiste", icon: ArrowDownLeft, color: "text-emerald-400" },
-    { label: "Gastos del mes", amount: actual.egresos, detail: "Todo lo que destinaste", icon: ArrowUpRight, color: "text-rose-400" },
-    { label: "Balance del mes", amount: neto, detail: neto < 0 ? "Los gastos superan tus ingresos" : "Ingresos menos gastos", icon: Activity, color: neto < 0 ? "text-rose-400" : "text-sky-300" },
-  ];
-  return <section aria-label="Indicadores del mes" className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">{items.map(({ label, amount, detail, icon: Icon, color }) => <article key={label} className="metric-card"><div className="flex items-center justify-between gap-3"><p className="text-sm text-slate-400">{label}</p><Icon size={18} className={color} /></div><p className="text-2xl lg:text-3xl font-semibold tracking-tight tabular-nums mt-4">{formatearMonto(amount)}</p><p className="text-xs text-slate-400 mt-2">{detail}</p></article>)}</section>;
+  const flujoNeto = actual.ingresos - actual.egresos;
+  const esSuperavit = flujoNeto >= 0;
+  const ratioGasto =
+    actual.ingresos > 0 ? Math.min(100, Math.round((actual.egresos / actual.ingresos) * 100)) : actual.egresos > 0 ? 100 : 0;
+
+  return (
+    <section aria-label="Resumen de salud financiera del mes" className="mb-4">
+      <div className="rounded-2xl border border-white/[0.08] bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-slate-950/80 p-3.5 sm:p-4 backdrop-blur-xl shadow-lg shadow-black/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Indicador de Flujo Neto del Mes */}
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border shrink-0 ${
+                esSuperavit
+                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                  : "bg-rose-500/15 border-rose-500/30 text-rose-400"
+              }`}
+            >
+              {esSuperavit ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Flujo Neto del Mes
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                    esSuperavit
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                      : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                  }`}
+                >
+                  {esSuperavit ? "Superávit +" : "Déficit −"}
+                </span>
+              </div>
+              <p
+                className={`text-lg sm:text-xl font-black tabular-nums tracking-tight mt-0.5 ${
+                  esSuperavit ? "text-emerald-300" : "text-rose-400"
+                }`}
+              >
+                {esSuperavit ? "+" : ""}
+                {formatearMonto(flujoNeto)}
+              </p>
+            </div>
+          </div>
+
+          {/* Métricas rápidas: Ratio de gasto y Fijo vs Variable */}
+          <div className="flex items-center gap-2 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.06] text-xs">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <Activity className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-slate-400 leading-none">Consumo de ingresos</p>
+                <p className="font-bold text-slate-200 tabular-nums mt-0.5">{ratioGasto}% gastado</p>
+              </div>
+            </div>
+
+            {actual.egresos > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <ShieldCheck className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                <div>
+                  <p className="text-[10px] text-slate-400 leading-none">Gastos fijos</p>
+                  <p className="font-bold text-slate-200 tabular-nums mt-0.5">
+                    {formatearMonto(actual.egresosFijos)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-slate-400 leading-none">Movimientos</p>
+                <p className="font-bold text-slate-200 tabular-nums mt-0.5">
+                  {actual.totalTransaccionesMes} este mes
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }

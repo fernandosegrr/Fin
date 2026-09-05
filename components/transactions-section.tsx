@@ -63,8 +63,9 @@ export function TransactionsSection({
     return transacciones.filter((t) => {
       const cumpleBusqueda =
         !busqueda.trim() ||
-        (t.descripcion || "").toLowerCase().includes(busqueda.toLowerCase()) ||
-        (t.categoria?.nombre || "").toLowerCase().includes(busqueda.toLowerCase());
+        (t.descripcion || "").toLowerCase().includes(busqueda.trim().toLowerCase()) ||
+        (t.categoria?.nombre || "").toLowerCase().includes(busqueda.trim().toLowerCase()) ||
+        (t.cliente?.nombre || "").toLowerCase().includes(busqueda.trim().toLowerCase());
 
       const cumpleTipo = filtroTipo === "todos" || t.categoria?.tipo === filtroTipo;
       const cumpleMetodo = filtroMetodo === "todos" || (t.metodo_pago || "tarjeta") === filtroMetodo;
@@ -239,7 +240,8 @@ export function TransactionsSection({
               <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-500" />
               <input
                 type="text"
-                placeholder="Buscar por concepto o categoría..."
+                aria-label="Buscar movimientos del mes"
+                placeholder="Buscar por concepto, categoría o cliente..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950/70 pl-10 pr-4 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/60 focus:outline-none"
@@ -372,7 +374,7 @@ export function TransactionsSection({
                             ) : null}
                           </p>
                           <span
-                            className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium border ${
+                            className={`text-[11px] px-1.5 py-0.5 rounded-md font-medium border ${
                               esEfectivo
                                 ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
                                 : "bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
@@ -411,7 +413,7 @@ export function TransactionsSection({
         type="button"
         onClick={abrirNuevo}
         aria-label="Agregar movimiento"
-        className="fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-2xl leading-none text-white shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all border border-emerald-300/40"
+        className="lg:hidden fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-2xl leading-none text-white shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all border border-emerald-300/40"
         style={{
           bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
           right: "max(1.25rem, calc((100vw - 640px) / 2 + 1.25rem))",
@@ -422,6 +424,7 @@ export function TransactionsSection({
 
       {/* Modales */}
       <TransactionCaptureModal
+        onCategoriasCambiadas={onTransaccionCambiada}
         categorias={categorias}
         clientes={clientes}
         abierto={modalCapturaAbierto}
@@ -432,6 +435,7 @@ export function TransactionsSection({
       />
 
       <CategoryManagerModal
+        onCambio={onTransaccionCambiada}
         categorias={categorias}
         abierto={modalCategoriasAbierto}
         onCerrar={() => setModalCategoriasAbierto(false)}

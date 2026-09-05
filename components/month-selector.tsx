@@ -40,6 +40,7 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
     <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#111726]/90 p-1.5 backdrop-blur-xl shadow-xl">
       <button
         type="button"
+        disabled={anio <= 2000 && mes === 1}
         onClick={irAnterior}
         aria-label="Mes anterior"
         className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95 shrink-0"
@@ -67,6 +68,7 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
 
       <button
         type="button"
+        disabled={anio >= 2100 && mes === 12}
         onClick={irSiguiente}
         aria-label="Mes siguiente"
         className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-slate-800/80 text-slate-300 transition-all hover:border-white/20 hover:bg-slate-700 hover:text-white active:scale-95 shrink-0"

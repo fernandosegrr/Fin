@@ -25,11 +25,14 @@ function n(v: unknown): number {
   return Number.isFinite(x) ? x : 0;
 }
 
-async function todas<T>(tabla: string, select: string, extra?: (q: any) => any): Promise<T[]> {
+function consulta(tabla: string, select: string) { return supabase.from(tabla).select(select); }
+type Consulta = ReturnType<typeof consulta>;
+
+async function todas<T>(tabla: string, select: string, extra?: (q: Consulta) => Consulta): Promise<T[]> {
   const filas: T[] = [];
   const TAM = 1000;
   for (let desde = 0; ; desde += TAM) {
-    let q = supabase.from(tabla).select(select).eq("user_id", userId).range(desde, desde + TAM - 1);
+    let q = consulta(tabla, select).eq("user_id", userId).range(desde, desde + TAM - 1);
     if (extra) q = extra(q);
     const { data, error } = await q;
     if (error) throw new Error(`${tabla}: ${error.message}`);

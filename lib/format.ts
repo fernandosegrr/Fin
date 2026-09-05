@@ -20,7 +20,15 @@ export function aNumero(valor: unknown): number {
 }
 
 export function redondearMonto(valor: number): number {
-  return Math.round(valor * 100) / 100;
+  return Math.sign(valor) * Math.round((Math.abs(valor) + Number.EPSILON) * 100) / 100;
+}
+
+/** Decimal exacto: no acepta sufijos, notación exponencial ni separadores ambiguos. */
+export function parsearMonto(texto: string): number {
+  const normalizado = texto.trim().replace(",", ".");
+  if (!/^-?(?:\d+|\d*\.\d{1,2})$/.test(normalizado)) return NaN;
+  const valor = Number(normalizado);
+  return Number.isFinite(valor) && Math.abs(valor) <= Number.MAX_SAFE_INTEGER / 100 ? valor : NaN;
 }
 
 /**

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { obtenerTransaccionesCompletasDelMes, obtenerTransferenciasCompletasDelMes } from "@/app/dashboard/actions";
 
@@ -21,9 +20,10 @@ export function ExportButton({ anio, mes, nombreMes }: Props) {
       // Se piden las transacciones del mes completo (sin el límite de 200
       // filas que usa la vista principal por rendimiento) para que el archivo
       // nunca quede incompleto en meses con muchos movimientos.
-      const [transacciones, transferencias] = await Promise.all([
+      const [transacciones, transferencias, XLSX] = await Promise.all([
         obtenerTransaccionesCompletasDelMes(anio, mes),
         obtenerTransferenciasCompletasDelMes(anio, mes),
+        import("xlsx"),
       ]);
 
       if (transacciones.length === 0 && transferencias.length === 0) {

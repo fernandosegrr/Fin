@@ -1,5 +1,7 @@
 "use client";
 
+import { parsearMonto } from "@/lib/format";
+
 import { useState } from "react";
 import { Flag, Pencil, Trash2, X, Loader2, Check } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
@@ -35,7 +37,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
-    const monto = Number.parseFloat(montoTexto.replace(",", "."));
+    const monto = parsearMonto(montoTexto);
     setGuardando(true);
     setError(null);
     const resultado = await guardarMetaAhorro({
@@ -71,7 +73,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
 
   return (
     <>
-      <SpotlightCard className="bg-slate-900/60 border-white/10 p-4 rounded-3xl">
+      <SpotlightCard className="bg-slate-900/60 border-white/10 p-5 rounded-3xl">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
@@ -81,7 +83,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
               <h3 className="text-sm font-bold text-slate-100 truncate">
                 {meta ? meta.nombre : "Meta de ahorro"}
               </h3>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-xs text-slate-400 mt-1">
                 {meta
                   ? meta.fecha_limite
                     ? `Objetivo ${formatearMonto(objetivo)} · para el ${meta.fecha_limite}`
@@ -104,7 +106,9 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
 
         {meta ? (
           <>
-            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-950 border border-white/5 p-0.5">
+            <p className="mt-6 text-3xl font-semibold tracking-tight tabular-nums">{porcentaje}<span className="text-lg text-slate-400">% de tu objetivo</span></p>
+            <p className="text-xs text-slate-400 mt-2">Referencia con tu saldo disponible; no es dinero apartado.</p>
+            <div role="progressbar" aria-label="Avance de la meta" aria-valuenow={porcentaje} aria-valuemin={0} aria-valuemax={100} className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-slate-950 border border-white/5 p-0.5">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-700"
                 style={{ width: `${porcentaje}%` }}

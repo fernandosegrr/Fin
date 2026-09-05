@@ -13,9 +13,10 @@ interface Props {
   categorias: Categoria[];
   /** Se llama con la categoría recién creada (p. ej. para seleccionarla en el modal de captura). */
   onCategoriaCreada?: (categoria: Categoria) => void;
+  onCambio?: () => void;
 }
 
-export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategoriaCreada }: Props) {
+export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategoriaCreada, onCambio }: Props) {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<TipoCategoria>("egreso");
   const [grupo, setGrupo] = useState<GrupoCategoria>("variable");
@@ -44,6 +45,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategori
         });
         setNombre("");
         onCategoriaCreada?.(creada);
+        onCambio?.();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al crear categoría.");
       }
@@ -64,6 +66,7 @@ export function CategoryManagerModal({ abierto, onCerrar, categorias, onCategori
     startTransition(async () => {
       try {
         await eliminarCategoria(idAEliminar);
+        onCambio?.();
       } catch (err) {
         setError(err instanceof Error ? err.message : "No se pudo eliminar la categoría.");
       }

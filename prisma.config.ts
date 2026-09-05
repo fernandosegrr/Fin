@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 /**
  * `datasource.url` es lo que usa el Prisma CLI (`migrate deploy`, `migrate
@@ -15,7 +15,7 @@ export default defineConfig({
   migrations: {
     path: "prisma/migrations",
   },
-  datasource: {
-    url: env("DIRECT_URL"),
-  },
+  // Generar el cliente no necesita acceso a Postgres. Las migraciones siguen
+  // requiriendo una URL directa configurada explícitamente.
+  ...(process.env.DIRECT_URL ? { datasource: { url: process.env.DIRECT_URL } } : {}),
 });

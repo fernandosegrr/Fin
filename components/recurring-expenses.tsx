@@ -1,6 +1,8 @@
 "use client";
 
-import { startTransition, useMemo, useOptimistic, useState } from "react";
+import { parsearMonto } from "@/lib/format";
+
+import { startTransition, useEffect, useRef, useMemo, useOptimistic, useState } from "react";
 import { Clock, Plus, CheckCircle2, Zap, Trash2, Calendar, CreditCard, Banknote, X, Loader2, Pencil } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
@@ -122,10 +124,19 @@ export function RecurringExpenses({
   // en móvil con red lenta) no alcance a registrar el mismo cobro dos veces
   // antes de que la UI se entere de que ya se cobró.
   const [procesando, setProcesando] = useState<Set<string>>(new Set());
+  const bloqueadosRef = useRef(new Set<string>());
+  const [registrados, setRegistrados] = useState(new Set<string>());
+  useEffect(() => {
+    setRegistrados(prev => {
+      const next = new Set(prev);
+      for (const id of recurrentesCobrados) next.delete(`${anio}-${mes}-${id}`);
+      return next.size === prev.size ? prev : next;
+    });
+  }, [anio, mes, recurrentesCobrados]);
 
   async function agregarRecurrente(e: React.FormEvent) {
     e.preventDefault();
-    const monto = Number.parseFloat(montoTexto.replace(",", "."));
+    const monto = parsearMonto(montoTexto);
     if (!nombre.trim() || !Number.isFinite(monto) || monto <= 0) {
       setErrorForm("Ingresa un nombre y un monto válido.");
       return;
@@ -206,7 +217,9 @@ export function RecurringExpenses({
   }
 
   async function ejecutarCobro(rec: GastoRecurrente, metodoPagoElegido: MetodoPago) {
-    if (procesando.has(rec.id) || !rec.categoria_id) return;
+    const clave = `${anio}-${mes}-${rec.id}`;
+    if (bloqueadosRef.current.has(clave) || cobradosEsteMes.has(rec.id) || registrados.has(clave) || !rec.categoria_id) return;
+    bloqueadosRef.current.add(clave);
     setProcesando((prev) => new Set(prev).add(rec.id));
 
     const catId = rec.categoria_id;
@@ -224,10 +237,12 @@ export function RecurringExpenses({
         fecha: fechaDeCobroEnMesVisto(rec.dia_cobro),
         tipo: "egreso",
       });
+      setRegistrados(prev => new Set(prev).add(clave));
     } catch {
       // El toast de error ya lo muestra el padre (onRegistrarTransaccion);
       // aquí solo nos interesa liberar el botón en el `finally`.
     } finally {
+      bloqueadosRef.current.delete(clave);
       setProcesando((prev) => {
         const siguiente = new Set(prev);
         siguiente.delete(rec.id);
@@ -237,20 +252,25 @@ export function RecurringExpenses({
   }
 
   const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso");
+  const totalProgramado = recurrentes.reduce((sum, rec) => sum + Number(rec.monto), 0);
+  const totalRegistrado = recurrentes.reduce((sum, rec) => sum + (cobradosEsteMes.has(rec.id) || registrados.has(`${anio}-${mes}-${rec.id}`) ? Number(rec.monto) : 0), 0);
 
   return (
-    <section className="mt-6">
+    <section>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {[{ label: "Programado al mes", amount: totalProgramado }, { label: "Marcado como registrado", amount: totalRegistrado }, { label: "Pendiente de registrar", amount: totalProgramado - totalRegistrado }].map(item => <div key={item.label} className="metric-card"><p className="text-sm text-slate-400">{item.label}</p><p className="text-2xl font-semibold tabular-nums mt-3">{formatearMonto(item.amount)}</p></div>)}
+      </div>
       <SpotlightCard className="bg-slate-900/60 border-white/10 p-4 sm:p-5 rounded-3xl">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
               <Clock className="h-4 w-4" />
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-slate-100 leading-none">
-                Suscripciones y Gastos Recurrentes
+                Tus pagos programados
               </h2>
-              <p className="text-[10px] text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-0.5">
                 {recurrentes.length} programado{recurrentes.length !== 1 ? "s" : ""} · cobros de{" "}
                 <span className="font-semibold text-slate-300">{nombreMesVisto}</span>
               </p>
@@ -258,7 +278,7 @@ export function RecurringExpenses({
           </div>
 
           <GlowButton
-            variant="secondary"
+            variant="primary"
             onClick={abrirModalNuevo}
             className="!py-1.5 !px-2.5 !text-xs"
           >
@@ -279,22 +299,23 @@ export function RecurringExpenses({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-3">
             {recurrentes.map((rec) => {
-              const yaCobrado = cobradosEsteMes.has(rec.id);
+              const yaCobrado = cobradosEsteMes.has(rec.id) || registrados.has(`${anio}-${mes}-${rec.id}`);
               const estaProcesando = procesando.has(rec.id);
-              const diasRestantes = rec.dia_cobro - hoyDia;
-              const esHoy = rec.dia_cobro === hoyDia;
+              const diaEfectivo = Math.min(rec.dia_cobro, new Date(Date.UTC(anio, mes, 0)).getUTCDate());
+              const diasRestantes = diaEfectivo - hoyDia;
+              const esHoy = diaEfectivo === hoyDia;
 
               return (
                 <div
                   key={rec.id}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-white/5 hover:border-white/15 transition-all"
+                  className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-[#101720] border border-white/10 hover:border-white/20 transition-colors"
                 >
                   <div className="min-w-0 pr-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-xs font-bold text-slate-200 truncate">{rec.nombre}</p>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-md font-medium border bg-slate-800 text-slate-300 border-white/10 flex items-center gap-1">
+                      <p className="text-base font-semibold text-slate-200 break-words">{rec.nombre}</p>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-md font-medium border bg-slate-800 text-slate-300 border-white/10 flex items-center gap-1">
                         {rec.metodo_pago === "efectivo" ? (
                           <>
                             <Banknote className="h-2.5 w-2.5 text-amber-400" /> Efectivo
@@ -307,38 +328,38 @@ export function RecurringExpenses({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                    <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
                       <span className="font-bold text-rose-400 text-xs">
                         {formatearMonto(rec.monto)}
                       </span>
                       <span>·</span>
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-slate-500" /> Día {rec.dia_cobro} de c/mes
+                        <Calendar className="h-3 w-3 text-slate-500" /> Día {diaEfectivo} este mes
                       </span>
                     </div>
 
                     <div className="mt-1.5">
                       {yaCobrado ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400">
                           <CheckCircle2 className="h-3 w-3" /> Registrado en {nombreMesVisto}
                         </span>
                       ) : !esMesEnCurso ? (
                         // "Se cobra HOY" / "Próximo en N días" solo tienen
                         // sentido en el mes en curso: en cualquier otro mes se
                         // comparaba el día de cobro contra el día de HOY.
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-xs text-slate-400 font-medium">
                           Sin registrar en {nombreMesVisto}
                         </span>
                       ) : esHoy ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 animate-pulse">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 animate-pulse">
                           ⚡ Se cobra HOY
                         </span>
                       ) : diasRestantes > 0 ? (
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-xs text-slate-400 font-medium">
                           Próximo en {diasRestantes} días
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-xs text-slate-400 font-medium">
                           Fecha de cobro cumplida
                         </span>
                       )}
@@ -351,7 +372,7 @@ export function RecurringExpenses({
                         <Zap className="h-3.5 w-3.5" /> Cobrado
                       </span>
                     ) : !rec.categoria_id ? (
-                      <span className="px-2 py-1.5 rounded-xl text-[10px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                      <span className="px-2 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-300">
                         Sin categoría
                       </span>
                     ) : estaProcesando ? (
@@ -360,7 +381,7 @@ export function RecurringExpenses({
                       </span>
                     ) : (
                       <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 p-1 rounded-xl">
-                        <span className="text-[10px] font-bold text-emerald-400 pl-1 pr-0.5 uppercase tracking-wider hidden sm:inline">
+                        <span className="text-xs font-bold text-emerald-400 pl-1 pr-0.5 uppercase tracking-wider hidden sm:inline">
                           Pagar:
                         </span>
                         <button

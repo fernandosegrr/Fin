@@ -7,6 +7,7 @@ import { BudgetManagerModal } from "./budget-manager-modal";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { copiarPresupuestosMesAnterior } from "@/app/dashboard/actions";
 import type { PresupuestoConGasto } from "@/lib/types";
+import { formatearMonto } from "@/lib/format";
 
 interface Props {
   items: PresupuestoConGasto[];
@@ -21,6 +22,9 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
   const [errorCopia, setErrorCopia] = useState<string | null>(null);
 
   const hayAlgunLimite = items.some((i) => i.presupuesto);
+  const conLimite = items.filter(item => item.presupuesto);
+  const limiteTotal = conLimite.reduce((total, item) => total + Number(item.presupuesto!.monto_limite), 0);
+  const gastoTotal = conLimite.reduce((total, item) => total + item.gastado, 0);
 
   async function copiarDelMesAnterior() {
     if (copiando) return;
@@ -43,11 +47,16 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
 
   return (
     <>
-      <section className="mt-8 px-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
+      <section>
+        <div className="budget-overview mb-7">
+          <div><p className="eyebrow">TU PLAN DEL MES</p><p className="text-3xl sm:text-4xl font-semibold tabular-nums tracking-tight mt-3">{formatearMonto(limiteTotal)}</p><p className="text-sm text-slate-400 mt-2">en {conLimite.length} categorías con límite</p></div>
+          <div><p className="text-sm text-slate-400">Gastado en esas categorías</p><p className="text-2xl font-semibold tabular-nums mt-2">{formatearMonto(gastoTotal)}</p></div>
+          <div><p className="text-sm text-slate-400">Margen total</p><p className={`text-2xl font-semibold tabular-nums mt-2 ${limiteTotal < gastoTotal ? "text-rose-300" : "text-emerald-300"}`}>{formatearMonto(limiteTotal - gastoTotal)}</p></div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-2 min-w-0">
             <Target className="h-4 w-4 text-emerald-400 shrink-0" />
-            <h2 className="text-sm font-semibold text-slate-200 truncate">Presupuestos Mensuales</h2>
+            <h2 className="text-lg font-semibold text-slate-200">Límites por categoría</h2>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -62,7 +71,7 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
               <span className="hidden sm:inline">Copiar mes anterior</span>
             </GlowButton>
             <GlowButton
-              variant="secondary"
+              variant="primary"
               onClick={() => setModalAbierto(true)}
               className="!py-1.5 !px-3 !text-xs"
             >
@@ -91,7 +100,7 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
         {items.length === 0 ? (
           <p className="text-xs text-slate-400">No hay categorías de egreso configuradas.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {items.map((item) => (
               <BudgetProgressBar key={item.categoria.id} {...item} />
             ))}

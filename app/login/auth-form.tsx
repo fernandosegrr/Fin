@@ -1,13 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
-import { Lock, Mail, ArrowRight } from "lucide-react";
+import { useActionState, useState } from "react";
+import { Lock, Mail, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { signIn, signUp, type EstadoAuth } from "./actions";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 
 const estadoInicial: EstadoAuth = { error: null, mensaje: null };
 
 export function AuthForm({ modo }: { modo: "login" | "signup" }) {
+  const [visible, setVisible] = useState(false);
   const [estado, formAction, pendiente] = useActionState(
     modo === "login" ? signIn : signUp,
     estadoInicial,
@@ -43,23 +44,24 @@ export function AuthForm({ modo }: { modo: "login" | "signup" }) {
           <input
             id="password"
             name="password"
-            type="password"
+            type={visible ? "text" : "password"}
             autoComplete={modo === "login" ? "current-password" : "new-password"}
             placeholder="••••••••"
             required
             minLength={6}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 pl-10 pr-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400/60 focus:outline-none"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/70 pl-10 pr-12 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400/60 focus:outline-none"
           />
+          <button type="button" aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"} aria-pressed={visible} onClick={() => setVisible(v => !v)} className="absolute right-2 p-2 text-slate-400">{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
         </div>
       </div>
 
       {estado.error && (
-        <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+        <p role="alert" className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
           {estado.error}
         </p>
       )}
       {estado.mensaje && (
-        <p className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-400">
+        <p role="status" className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-400">
           {estado.mensaje}
         </p>
       )}

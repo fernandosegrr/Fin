@@ -1,10 +1,12 @@
 "use server";
 
+import { paginaHistorial, patronBusqueda, valorLogico } from "@/lib/search";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   esFechaISO,
+  esMesCalendario,
   hoyEnMexico,
   hoyISOEnMexico,
   mesAnterior,
@@ -189,7 +191,7 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   if (!input.categoria_id) {
     throw new Error("Selecciona una categoría.");
   }
-  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+  if (!Number.isFinite(input.monto) || redondearMonto(input.monto) <= 0) {
     throw new Error("El monto debe ser mayor a 0.");
   }
   const metodoPago = input.metodo_pago ?? "tarjeta";
@@ -199,7 +201,19 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
 
   const supabase = await createClient();
   const user = await exigirUsuario(supabase);
-  await exigirCategoriaDelUsuario(supabase, input.categoria_id);
+  const categoria = await exigirCategoriaDelUsuario(supabase, input.categoria_id);
+
+  const fecha = fechaOHoy(input.fecha);
+  if (input.gasto_recurrente_id) {
+    const recurrente = await supabase.from("gastos_recurrentes").select("id").eq("id", input.gasto_recurrente_id).eq("user_id", user.id).maybeSingle();
+    if (recurrente.error) throw new Error(recurrente.error.message);
+    if (!recurrente.data || categoria.tipo !== "egreso") throw new Error("El gasto recurrente no es válido.");
+    const [anio, mes] = fecha.split("-").map(Number);
+    const rango = rangoDelMes(anio, mes);
+    const existente = await supabase.from("transacciones").select("id").eq("user_id", user.id).eq("gasto_recurrente_id", input.gasto_recurrente_id).gte("fecha", rango.inicio).lt("fecha", rango.finExclusivo).limit(1);
+    if (existente.error) throw new Error(existente.error.message);
+    if (existente.data?.length) throw new Error("Este pago recurrente ya está registrado en ese mes.");
+  }
 
   if (input.cliente_id) await exigirClienteDelUsuario(supabase, input.cliente_id);
 
@@ -207,7 +221,7 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
     user_id: user.id,
     categoria_id: input.categoria_id,
     monto: redondearMonto(input.monto),
-    fecha: fechaOHoy(input.fecha),
+    fecha,
     descripcion: input.descripcion?.trim() || null,
     metodo_pago: metodoPago,
     gasto_recurrente_id: input.gasto_recurrente_id ?? null,
@@ -234,7 +248,7 @@ export async function actualizarTransaccion(
 ): Promise<void> {
   if (!id) throw new Error("ID de transacción inválido.");
   if (!input.categoria_id) throw new Error("Selecciona una categoría.");
-  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+  if (!Number.isFinite(input.monto) || redondearMonto(input.monto) <= 0) {
     throw new Error("El monto debe ser mayor a 0.");
   }
   const metodoPago = input.metodo_pago ?? "tarjeta";
@@ -298,7 +312,7 @@ export interface NuevaTransferencia {
 }
 
 export async function crearTransferencia(input: NuevaTransferencia): Promise<void> {
-  if (!Number.isFinite(input.monto) || input.monto <= 0) {
+  if (!Number.isFinite(input.monto) || redondearMonto(input.monto) <= 0) {
     throw new Error("El monto debe ser mayor a 0.");
   }
   if (!esMetodoPago(input.origen) || !esMetodoPago(input.destino)) {
@@ -653,6 +667,7 @@ export async function obtenerBalanceMensual(
   const hoy = hoyEnMexico();
   const anio = anioTarget ?? hoy.anio;
   const mes = mesTarget ?? hoy.mes;
+  if (!esMesCalendario(anio, mes)) throw new Error("Selecciona un mes válido entre 2000 y 2100.");
 
   const anteriorYM = mesAnterior(anio, mes);
   const rangoActual = rangoDelMes(anio, mes);
@@ -976,8 +991,8 @@ export interface NuevoGastoRecurrente {
 export async function crearGastoRecurrente(input: NuevoGastoRecurrente): Promise<void> {
   if (!input.nombre.trim()) throw new Error("El nombre es requerido.");
   if (input.nombre.trim().length > 80) throw new Error("El nombre es demasiado largo (máx. 80 caracteres).");
-  if (!Number.isFinite(input.monto) || input.monto <= 0) throw new Error("El monto debe ser mayor a 0.");
-  if (input.dia_cobro < 1 || input.dia_cobro > 31) throw new Error("El día de cobro debe estar entre 1 y 31.");
+  if (!Number.isFinite(input.monto) || redondearMonto(input.monto) <= 0) throw new Error("El monto debe ser mayor a 0.");
+  if (!Number.isInteger(input.dia_cobro) || input.dia_cobro < 1 || input.dia_cobro > 31) throw new Error("El día de cobro debe estar entre 1 y 31.");
   if (!input.categoria_id) throw new Error("Selecciona una categoría.");
   if (!esMetodoPago(input.metodo_pago)) throw new Error("El método de pago no es válido.");
 
@@ -1009,8 +1024,8 @@ export async function actualizarGastoRecurrente(
   if (!id) throw new Error("ID inválido.");
   if (!input.nombre.trim()) throw new Error("El nombre es requerido.");
   if (input.nombre.trim().length > 80) throw new Error("El nombre es demasiado largo (máx. 80 caracteres).");
-  if (!Number.isFinite(input.monto) || input.monto <= 0) throw new Error("El monto debe ser mayor a 0.");
-  if (input.dia_cobro < 1 || input.dia_cobro > 31) throw new Error("El día de cobro debe estar entre 1 y 31.");
+  if (!Number.isFinite(input.monto) || redondearMonto(input.monto) <= 0) throw new Error("El monto debe ser mayor a 0.");
+  if (!Number.isInteger(input.dia_cobro) || input.dia_cobro < 1 || input.dia_cobro > 31) throw new Error("El día de cobro debe estar entre 1 y 31.");
   if (!input.categoria_id) throw new Error("Selecciona una categoría.");
   if (!esMetodoPago(input.metodo_pago)) throw new Error("El método de pago no es válido.");
 
@@ -1226,7 +1241,8 @@ export async function guardarMetaAhorro(input: {
       fecha_limite: fechaLimite,
     };
 
-    const { data: existente } = await supabase.from("metas_ahorro").select("id").maybeSingle();
+    const { data: existente, error: errorConsulta } = await supabase.from("metas_ahorro").select("id").eq("user_id", user.id).maybeSingle();
+    if (errorConsulta) throw new Error(errorConsulta.message);
     const query = existente
       ? supabase.from("metas_ahorro").update(payload).eq("id", existente.id)
       : supabase.from("metas_ahorro").insert(payload);
@@ -1261,10 +1277,6 @@ export async function eliminarMetaAhorro(): Promise<void> {
 // HISTORIAL GLOBAL
 // ─────────────────────────────────────────────
 
-function escaparIlike(valor: string): string {
-  return valor.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-}
-
 export async function buscarTransacciones(input: {
   busqueda?: string;
   tipo?: "todos" | TipoCategoria;
@@ -1273,55 +1285,44 @@ export async function buscarTransacciones(input: {
   offset?: number;
 }): Promise<{ filas: TransaccionConCategoria[]; total: number }> {
   const supabase = await createClient();
-  const limite = Math.min(50, Math.max(1, input.limite ?? 50));
-  const offset = Math.max(0, input.offset ?? 0);
+  const { limite, offset } = paginaHistorial(input.limite, input.offset);
   const busqueda = input.busqueda?.trim() ?? "";
-
+  if (input.tipo && !["todos", "ingreso", "egreso"].includes(input.tipo)) throw new Error("Tipo no válido.");
+  if (input.metodoPago && !["todos", "tarjeta", "efectivo"].includes(input.metodoPago)) throw new Error("Cuenta no válida.");
   const usaInnerTipo = Boolean(input.tipo && input.tipo !== "todos");
-  const select = usaInnerTipo
-    ? "*, categoria:categorias!inner(id, nombre, tipo, grupo), cliente:clientes(id, nombre)"
-    : "*, categoria:categorias(id, nombre, tipo, grupo), cliente:clientes(id, nombre)";
+  const categoriaSelect = usaInnerTipo ? "categoria:categorias!inner(id, nombre, tipo, grupo)" : "categoria:categorias(id, nombre, tipo, grupo)";
 
-  let query = supabase
-    .from("transacciones")
-    .select(select, { count: "exact" })
-    .order("fecha", { ascending: false })
-    .order("creado_en", { ascending: false });
-
-  if (usaInnerTipo) query = query.eq("categorias.tipo", input.tipo);
-  if (input.metodoPago && input.metodoPago !== "todos") {
-    query = query.eq("metodo_pago", input.metodoPago);
-  }
-
-  if (busqueda) {
-    const q = `%${escaparIlike(busqueda)}%`;
-    const [{ data: cats }, { data: clis }] = await Promise.all([
-      supabase.from("categorias").select("id").ilike("nombre", q),
-      supabase.from("clientes").select("id").ilike("nombre", q),
-    ]);
-    const partes = [`descripcion.ilike.${q}`];
-    const catIds = (cats ?? []).map((c) => c.id as string);
-    const cliIds = (clis ?? []).map((c) => c.id as string);
-    if (catIds.length) partes.push(`categoria_id.in.(${catIds.join(",")})`);
-    if (cliIds.length) partes.push(`cliente_id.in.(${cliIds.join(",")})`);
-    query = query.or(partes.join(","));
-  }
-
-  const { data, error, count } = await query.range(offset, offset + limite - 1);
-  if (error) {
-    if (esErrorEsquemaClientes(error.message)) {
-      const fallback = await supabase
-        .from("transacciones")
-        .select(SELECT_LISTA_SIN_CLIENTE, { count: "exact" })
-        .order("fecha", { ascending: false })
-        .order("creado_en", { ascending: false })
-        .range(offset, offset + limite - 1);
-      if (fallback.error) throw new Error(`No se pudo buscar el historial: ${fallback.error.message}`);
-      return { filas: (fallback.data ?? []) as unknown as TransaccionConCategoria[], total: fallback.count ?? 0 };
+  async function consultar(conClientes: boolean) {
+    const select = "*, " + categoriaSelect + (conClientes ? ", cliente:clientes(id, nombre)" : "");
+    let query = supabase.from("transacciones").select(select, { count: "exact" })
+      .order("fecha", { ascending: false }).order("creado_en", { ascending: false }).order("id", { ascending: false });
+    if (usaInnerTipo) query = query.eq("categoria.tipo", input.tipo);
+    if (input.metodoPago && input.metodoPago !== "todos") query = query.eq("metodo_pago", input.metodoPago);
+    if (busqueda) {
+      const q = patronBusqueda(busqueda);
+      const cats = await supabase.from("categorias").select("id").ilike("nombre", q);
+      if (cats.error) throw new Error(cats.error.message);
+      const partes = ["descripcion.ilike." + valorLogico(q)];
+      const catIds = (cats.data ?? []).map(c => valorLogico(String(c.id)));
+      if (catIds.length) partes.push("categoria_id.in.(" + catIds.join(",") + ")");
+      if (conClientes) {
+        const clis = await supabase.from("clientes").select("id").ilike("nombre", q);
+        if (clis.error) {
+          if (!esErrorEsquemaClientes(clis.error.message)) throw new Error(clis.error.message);
+        } else {
+          const cliIds = (clis.data ?? []).map(c => valorLogico(String(c.id)));
+          if (cliIds.length) partes.push("cliente_id.in.(" + cliIds.join(",") + ")");
+        }
+      }
+      query = query.or(partes.join(","));
     }
-    throw new Error(`No se pudo buscar el historial: ${error.message}`);
+    return query.range(offset, offset + limite - 1);
   }
-  return { filas: (data ?? []) as unknown as TransaccionConCategoria[], total: count ?? 0 };
+
+  let resultado = await consultar(true);
+  if (resultado.error && esErrorEsquemaClientes(resultado.error.message)) resultado = await consultar(false);
+  if (resultado.error) throw new Error("No se pudo buscar el historial: " + resultado.error.message);
+  return { filas: (resultado.data ?? []) as unknown as TransaccionConCategoria[], total: resultado.count ?? 0 };
 }
 
 /**

@@ -165,7 +165,7 @@ export function AsesorChat({ anio, mes }: Props) {
   const cercaDelLimite = texto.length > MAX_CARACTERES - 400;
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/60 overflow-hidden flex flex-col">
+    <div className="advisor-panel rounded-3xl border border-white/10 bg-[#101720] overflow-hidden flex flex-col">
       <div className="px-4 sm:px-5 py-4 border-b border-white/10 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 shrink-0">
           <Bot className="h-5 w-5 text-emerald-400" />
@@ -192,7 +192,7 @@ export function AsesorChat({ anio, mes }: Props) {
         )}
       </div>
 
-      <div className="px-4 sm:px-5 py-4 space-y-3 overflow-y-auto max-h-[55dvh]">
+      <div className="px-4 sm:px-8 py-6 space-y-5 overflow-y-auto min-h-72 max-h-[55dvh]">
         {cargando && (
           <div className="space-y-2">
             <div className="h-14 w-2/3 rounded-2xl bg-slate-800/60 animate-pulse" />
@@ -214,8 +214,9 @@ export function AsesorChat({ anio, mes }: Props) {
         )}
 
         {!cargando && !errorCarga && mensajes.length === 0 && !enviando && (
-          <div className="text-center py-6">
-            <Sparkles className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+          <div className="text-center py-8 sm:py-12">
+            <Sparkles className="h-10 w-10 text-emerald-300 mx-auto mb-5" />
+            <h3 className="text-2xl font-semibold tracking-tight mb-3">Dale claridad a tus números</h3>
             <p className="text-xs text-slate-500 max-w-xs mx-auto mb-4">
               Pregúntame sobre tus finanzas — veo ingresos, gastos, presupuestos y suscripciones de {nombreDelMes(anio, mes)}.
             </p>

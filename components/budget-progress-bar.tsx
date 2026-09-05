@@ -20,13 +20,13 @@ export function BudgetProgressBar({ categoria, presupuesto, gastado }: Presupues
     );
   }
 
-  const porcentaje = Math.min(100, Math.round((gastado / presupuesto.monto_limite) * 100));
+  const porcentaje = Math.max(0, Math.round((gastado / presupuesto.monto_limite) * 100));
   const excedido = gastado > presupuesto.monto_limite;
   const cercaDelLimite = porcentaje >= 80 && !excedido;
 
   return (
-    <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2 backdrop-blur-sm">
-      <div className="flex items-center justify-between">
+    <div className="p-5 rounded-2xl bg-[#101720] border border-white/10 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {excedido ? (
             <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0" />
@@ -47,16 +47,16 @@ export function BudgetProgressBar({ categoria, presupuesto, gastado }: Presupues
       </div>
 
       {/* Progress Bar con Glow */}
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-950 p-0.5 border border-white/5">
+      <div role="progressbar" aria-label={`Presupuesto de ${categoria.nombre}`} aria-valuenow={Math.min(100, porcentaje)} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${porcentaje}% del límite gastado`} className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
         <div
           className={`h-full rounded-full transition-all duration-700 ${
             excedido
-              ? "bg-gradient-to-r from-rose-600 to-red-500 shadow-md shadow-rose-500/50"
+              ? "bg-rose-400"
               : cercaDelLimite
-              ? "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-md shadow-amber-500/40"
-              : "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-md shadow-emerald-500/40"
+              ? "bg-amber-300"
+              : "bg-emerald-300"
           }`}
-          style={{ width: `${porcentaje}%` }}
+          style={{ width: `${Math.min(100, porcentaje)}%` }}
         />
       </div>
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { DashboardNavigation, sections } from "./dashboard-navigation";
+import { MonthInsights } from "./month-insights";
 import { LogOut, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { AsesorChat } from "@/components/asesor-chat";
 import { BalanceResumen } from "@/components/balance-resumen";
 import { AnalyticsSummary } from "@/components/analytics-summary";
-import { FinancialCharts } from "@/components/financial-charts";
 import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
 import { TransactionsSection } from "@/components/transactions-section";
 import { RecurringExpenses } from "@/components/recurring-expenses";
@@ -15,8 +16,8 @@ import { ExportButton } from "@/components/export-button";
 import { ToastNotification, type ToastMessage } from "@/components/toast-notification";
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { ShinyText } from "@/components/react-bits/ShinyText";
 import {
+  obtenerCategorias,
   obtenerBalanceMensual,
   obtenerPresupuestosConGasto,
   obtenerGastosRecurrentes,
@@ -31,6 +32,9 @@ import type { Categoria, Cliente, GastoRecurrente, MetaAhorro, MetodoPago, Presu
 import { SavingsGoalCard } from "@/components/savings-goal-card";
 import { HistorialModal } from "@/components/historial-modal";
 
+const FinancialCharts = dynamic(() => import("./financial-charts").then(m => m.FinancialCharts), { loading: () => <p role="status" className="p-6 text-slate-400">Cargando gráficas…</p> });
+const AsesorChat = dynamic(() => import("./asesor-chat").then(m => m.AsesorChat), { loading: () => <p role="status" className="p-6 text-slate-400">Abriendo asesor…</p> });
+
 interface Props {
   initialBalance: BalanceMensual;
   initialPresupuestos: PresupuestoConGasto[];
@@ -44,10 +48,11 @@ export function DashboardContainer({
   initialBalance,
   initialPresupuestos,
   initialGastosRecurrentes,
-  categorias,
+  categorias: initialCategorias,
   initialClientes,
   initialMeta,
 }: Props) {
+  const [categorias, setCategorias] = useState(initialCategorias);
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [asesorVisitado, setAsesorVisitado] = useState(false);
   const [balance, setBalance] = useState<BalanceMensual>(initialBalance);
@@ -134,12 +139,13 @@ export function DashboardContainer({
 
       startTransition(async () => {
         try {
-          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes, nuevosClientes, nuevaMeta] = await Promise.all([
+          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes, nuevosClientes, nuevaMeta, nuevasCategorias] = await Promise.all([
             obtenerBalanceMensual(anioActual, mesActual),
             obtenerPresupuestosConGasto(anioActual, mesActual),
             obtenerGastosRecurrentes(),
             obtenerClientes(),
             obtenerMetaAhorro(),
+            obtenerCategorias(),
           ]);
           if (solicitudIdRef.current !== idSolicitud) return;
           setBalance(nuevoBalance);
@@ -147,6 +153,7 @@ export function DashboardContainer({
           setGastosRecurrentes(nuevosRecurrentes);
           setClientes(nuevosClientes);
           setMeta(nuevaMeta);
+          setCategorias(nuevasCategorias);
         } catch (err) {
           if (solicitudIdRef.current !== idSolicitud) return;
           console.error("Error recargando datos del dashboard:", err);
@@ -192,6 +199,7 @@ export function DashboardContainer({
 
       canal = supabase
         .channel(`realtime_dashboard_${userId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "categorias", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
@@ -269,6 +277,9 @@ export function DashboardContainer({
         // Los gastos recurrentes no cambian con el mes, no hay que recargarlos
       } catch (err) {
         if (solicitudIdRef.current !== idSolicitud) return;
+        setAnio(balance.actual.anio);
+        setMes(balance.actual.mes);
+        mesVistaRef.current = { anio: balance.actual.anio, mes: balance.actual.mes };
         console.error("Error cambiando de mes:", err);
         setToast({
           id: String(Date.now()),
@@ -320,27 +331,31 @@ export function DashboardContainer({
   // `anio`/`mes` ya cambiaron pero `presupuestos` sigue siendo del mes viejo.
   const mesISO = primerDiaDelMes(balance.actual.anio, balance.actual.mes);
 
+  const section = sections.find((item) => item.id === tabActiva)!;
+  function cambiarTab(tab: TabId) {
+    if (tab === "asesor") setAsesorVisitado(true);
+    setTabActiva(tab);
+  }
+
   return (
-    <main className="min-h-dvh max-w-app sm:max-w-desktop mx-auto pb-24 px-3 sm:px-6 bg-[#070a12] relative">
+    <main className="dashboard-shell">
+      <a href="#contenido" className="skip-link">Saltar al contenido</a>
+      <DashboardNavigation active={tabActiva} onChange={cambiarTab} />
       {/* Toast Banner Flotante con animación */}
       <ToastNotification toast={toast} onCerrar={cerrarToast} />
 
       {/* Top Navbar responsiva */}
       <header
-        className="sticky top-0 z-30 flex items-center justify-between px-3 sm:px-4 pb-3 bg-[#070a12]/95 backdrop-blur-xl border-b border-white/10 -mx-3 sm:-mx-6 mb-2"
+        className="dashboard-header sticky top-0 z-30 flex items-center justify-between pb-4 bg-[#070a12]/95 backdrop-blur-xl border-b border-white/10"
         style={{
           paddingTop: "max(0.75rem, calc(0.5rem + env(safe-area-inset-top, 0px)))",
         }}
       >
         <div className="flex items-center gap-2.5">
-          <img
-            src="/logo.png"
-            alt="NexFin Logo"
-            className="h-9 w-9 rounded-xl object-cover shadow-lg shadow-emerald-500/25 border border-white/10 shrink-0"
-          />
+          <span className="brand-mark lg:hidden" aria-hidden="true">n.</span>
           <div>
             <h1 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-1.5 leading-none">
-              NexFin <ShinyText text="Pro" className="text-[10px] sm:text-xs font-black tracking-widest uppercase" />
+              <span className="lg:hidden">NexFin Pro</span><span className="hidden lg:inline text-slate-300 font-medium">Mi espacio financiero</span>
             </h1>
             <p
               className={`text-[10px] mt-0.5 flex items-center gap-1 font-medium ${
@@ -358,7 +373,7 @@ export function DashboardContainer({
                 ></span>
               </span>
               {estadoConexion === "vivo"
-                ? "En Vivo (WebSocket)"
+                ? "Sincronizado"
                 : estadoConexion === "conectando"
                   ? "Conectando…"
                   : "Reconectando…"}
@@ -375,6 +390,7 @@ export function DashboardContainer({
             type="button"
             className="!p-2"
             title="Buscar en todo el historial"
+            aria-label="Buscar en todo el historial"
             onClick={() => setHistorialAbierto(true)}
           >
             <Search className="h-4 w-4 text-slate-400 hover:text-emerald-400" />
@@ -385,7 +401,7 @@ export function DashboardContainer({
             nombreMes={balance.actual.nombreMes}
           />
           <form action={signOut}>
-            <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión">
+            <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión" aria-label="Cerrar sesión">
               <LogOut className="h-4 w-4 text-slate-400 hover:text-rose-400" />
             </GlowButton>
           </form>
@@ -393,12 +409,13 @@ export function DashboardContainer({
       </header>
 
       {/* Selector de Mes */}
-      <div className="pt-2">
-        <MonthSelector anio={anio} mes={mes} onCambiarMes={cambiarMes} />
+      <div className="page-heading">
+        <div><p className="eyebrow">TU DINERO, CON CLARIDAD</p><h2>{section.label}</h2><p className="text-sm text-slate-400 mt-2">{section.description}</p></div>
+        <div className="w-full sm:w-auto sm:min-w-72"><MonthSelector anio={anio} mes={mes} onCambiarMes={cambiarMes} /></div>
       </div>
 
       {isPending && (
-        <div className="mt-2">
+        <div role="status" aria-label="Actualizando datos" className="mt-2">
           <div className="h-1 w-full bg-emerald-500/20 overflow-hidden rounded-full">
             <div className="h-full bg-emerald-400 animate-pulse w-1/2" />
           </div>
@@ -406,10 +423,12 @@ export function DashboardContainer({
       )}
 
       {/* CONTENIDO DE PESTAÑAS */}
-      <div className="mt-1">
+      <div id="contenido" tabIndex={-1} aria-busy={isPending} className="mt-1">
         {/* Pestaña 1: INICIO (Saldo Total + Movimientos del Mes) */}
         {tabActiva === "inicio" && (
           <div className="space-y-4 animate-in fade-in duration-300">
+            <MonthInsights actual={balance.actual} />
+            <div className="overview-grid">
             <BalanceResumen
               actual={balance.actual}
               anterior={balance.anterior}
@@ -420,6 +439,7 @@ export function DashboardContainer({
               saldoActual={balance.actual.saldoTotalDisponible}
               onCambio={recargarDatos}
             />
+            </div>
             <TransactionsSection
               // Se llavea con el mes YA CARGADO, no con el solicitado: entre
               // el clic y la respuesta del servidor, `anio`/`mes` ya cambiaron
@@ -493,10 +513,7 @@ export function DashboardContainer({
 
       <BottomNavigationBar
         tabActiva={tabActiva}
-        onCambiarTab={(tab) => {
-          if (tab === "asesor") setAsesorVisitado(true);
-          setTabActiva(tab);
-        }}
+        onCambiarTab={cambiarTab}
       />
     </main>
   );

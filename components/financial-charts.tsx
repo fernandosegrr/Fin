@@ -47,18 +47,18 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
   ];
 
   return (
-    <section className="px-4 mt-6">
+    <section className="mt-6">
       <SpotlightCard className="bg-slate-900/60 border-white/10 p-5 rounded-3xl">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
               {activeTab === "pie" ? <PieIcon className="h-4 w-4" /> : <BarChart3 className="h-4 w-4" />}
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-100">
-                {activeTab === "pie" ? "Distribución de Egresos" : "Comparativa Flujo de Efectivo"}
+              <h3 className="text-lg font-semibold text-slate-100">
+                {activeTab === "pie" ? "¿En qué se fue tu dinero?" : "Lo que entra y lo que sale"}
               </h3>
-              <p className="text-xs text-slate-400">Análisis visual interactivo</p>
+              <p className="text-sm text-slate-400">Una mirada al mes seleccionado</p>
             </div>
           </div>
 
@@ -67,9 +67,10 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
             <button
               type="button"
               onClick={() => setActiveTab("pie")}
+              aria-pressed={activeTab === "pie"}
               className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === "pie"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-emerald-300 text-emerald-950"
                   : "text-slate-400 hover:text-white"
               }`}
             >
@@ -78,9 +79,10 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
             <button
               type="button"
               onClick={() => setActiveTab("bar")}
+              aria-pressed={activeTab === "bar"}
               className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === "bar"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-emerald-300 text-emerald-950"
                   : "text-slate-400 hover:text-white"
               }`}
             >
@@ -96,16 +98,17 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 items-center gap-4">
-              <div className="h-52 w-full">
+              <div className="h-64 w-full min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={75}
-                      paddingAngle={4}
+                      innerRadius={70}
+                      outerRadius={96}
+                      paddingAngle={3}
+                      stroke="none"
                       dataKey="value"
                     >
                       {pieData.map((_, index) => (

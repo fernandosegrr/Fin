@@ -57,7 +57,7 @@ export function AnalyticsSummary({
           <p className="mt-1.5 text-base sm:text-lg font-bold text-slate-100 tabular-nums">
             {formatearMonto(promedioDiario)}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-400 truncate">por día del mes</p>
+          <p className="mt-0.5 text-xs text-slate-400 truncate">por día del mes</p>
         </SpotlightCard>
 
         {/* Categoria Top */}
@@ -69,7 +69,7 @@ export function AnalyticsSummary({
           <p className="mt-1.5 text-xs sm:text-sm font-bold text-slate-100 truncate" title={topCategoria.nombre}>
             {topCategoria.nombre}
           </p>
-          <p className="mt-0.5 text-[10px] text-indigo-300 font-bold tabular-nums">
+          <p className="mt-0.5 text-xs text-indigo-300 font-bold tabular-nums">
             {formatearMonto(topCategoria.monto)}
           </p>
         </SpotlightCard>
@@ -81,7 +81,7 @@ export function AnalyticsSummary({
               <PieChart className="h-3.5 w-3.5 text-amber-400 shrink-0" />
               Gastos Fijos vs Variables
             </span>
-            <span className="text-[10px] font-bold text-slate-200">
+            <span className="text-xs font-bold text-slate-200">
               {porcentajeFijo}% Fijo / {porcentajeVariable}% Var.
             </span>
           </div>
@@ -100,7 +100,7 @@ export function AnalyticsSummary({
             />
           </div>
 
-          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+          <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" /> Fijo: {formatearMonto(egresosFijos)}
             </span>

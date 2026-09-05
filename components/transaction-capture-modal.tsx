@@ -1,5 +1,7 @@
 "use client";
 
+import { parsearMonto } from "@/lib/format";
+
 import { useEffect, useMemo, useState } from "react";
 import { X, PlusCircle, Pencil, Trash2, Tag, Plus, CreditCard, Banknote, Calendar } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
@@ -28,6 +30,7 @@ interface Props {
   onCerrar: () => void;
   onEnviar: (datos: DatosNuevaTransaccion) => void;
   onEliminar?: (id: string) => void;
+  onCategoriasCambiadas?: () => void;
 }
 
 export function TransactionCaptureModal({
@@ -38,6 +41,7 @@ export function TransactionCaptureModal({
   onCerrar,
   onEnviar,
   onEliminar,
+  onCategoriasCambiadas,
 }: Props) {
   const [tipo, setTipo] = useState<TipoCategoria>("egreso");
   const [montoTexto, setMontoTexto] = useState("");
@@ -105,7 +109,7 @@ export function TransactionCaptureModal({
 
   function manejarEnvio(e: React.FormEvent) {
     e.preventDefault();
-    const monto = Number.parseFloat(montoTexto.replace(",", "."));
+    const monto = parsearMonto(montoTexto);
 
     if (!Number.isFinite(monto) || monto <= 0) {
       setError("Ingresa un monto válido mayor a 0.");
@@ -401,6 +405,7 @@ export function TransactionCaptureModal({
       </div>
 
       <CategoryManagerModal
+        onCambio={onCategoriasCambiadas}
         categorias={categorias}
         abierto={modalCategoriasAbierto}
         onCerrar={() => setModalCategoriasAbierto(false)}

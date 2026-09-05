@@ -11,8 +11,8 @@ interface Props {
 
 export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
   const tabs = [
-    { id: "inicio" as TabId, label: "Inicio", icon: Home },
-    { id: "suscripciones" as TabId, label: "Suscripciones", icon: Zap },
+    { id: "inicio" as TabId, label: "Resumen", icon: Home },
+    { id: "suscripciones" as TabId, label: "Pagos", icon: Zap },
     { id: "estadisticas" as TabId, label: "Estadísticas", icon: BarChart3 },
     { id: "presupuestos" as TabId, label: "Presupuestos", icon: Target },
     { id: "asesor" as TabId, label: "Asesor", icon: Sparkles },
@@ -20,7 +20,8 @@ export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-[#070a12]/95 backdrop-blur-2xl border-t border-white/10"
+      aria-label="Navegación móvil"
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#101720]/95 backdrop-blur-2xl border-t border-white/10"
       style={{
         paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))",
       }}
@@ -32,17 +33,18 @@ export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
 
           return (
             <button
+              aria-current={esActiva ? "page" : undefined}
               key={tab.id}
               type="button"
               onClick={() => onCambiarTab(tab.id)}
-              className={`flex-1 flex flex-col items-center justify-center py-1 px-2 rounded-2xl transition-all relative ${
+              className={`min-w-0 min-h-12 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-colors relative ${
                 esActiva
-                  ? "text-emerald-400 font-bold"
+                  ? "text-emerald-300 bg-emerald-300/10 font-semibold"
                   : "text-slate-400 hover:text-slate-200 font-medium"
               }`}
             >
               {esActiva && (
-                <span className="absolute -top-2 h-1 w-8 rounded-full bg-emerald-400 shadow-lg shadow-emerald-400/50" />
+                <span className="absolute -top-2 h-0.5 w-6 rounded-full bg-emerald-300" />
               )}
               <div
                 className={`p-1 rounded-xl transition-all ${

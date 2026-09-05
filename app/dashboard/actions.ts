@@ -1337,8 +1337,7 @@ export async function buscarTransferencias(input: {
   offset?: number;
 }): Promise<{ filas: Transferencia[]; total: number }> {
   const supabase = await createClient();
-  const limite = Math.min(50, Math.max(1, input.limite ?? 50));
-  const offset = Math.max(0, input.offset ?? 0);
+  const { limite, offset } = paginaHistorial(input.limite, input.offset);
   const busqueda = input.busqueda?.trim() ?? "";
 
   let query = supabase
@@ -1351,7 +1350,7 @@ export async function buscarTransferencias(input: {
     query = query.or(`origen.eq.${input.metodoPago},destino.eq.${input.metodoPago}`);
   }
   if (busqueda) {
-    query = query.ilike("descripcion", `%${escaparIlike(busqueda)}%`);
+    query = query.ilike("descripcion", patronBusqueda(busqueda));
   }
 
   const { data, error, count } = await query.range(offset, offset + limite - 1);

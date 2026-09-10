@@ -7,7 +7,7 @@ import { BudgetManagerModal } from "./budget-manager-modal";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { copiarPresupuestosMesAnterior } from "@/app/dashboard/actions";
 import type { PresupuestoConGasto } from "@/lib/types";
-import { formatearMonto } from "@/lib/format";
+import { formatearMonto, redondearMonto } from "@/lib/format";
 
 interface Props {
   items: PresupuestoConGasto[];
@@ -23,8 +23,8 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
 
   const hayAlgunLimite = items.some((i) => i.presupuesto);
   const conLimite = items.filter(item => item.presupuesto);
-  const limiteTotal = conLimite.reduce((total, item) => total + Number(item.presupuesto!.monto_limite), 0);
-  const gastoTotal = conLimite.reduce((total, item) => total + item.gastado, 0);
+  const limiteTotal = redondearMonto(conLimite.reduce((total, item) => total + Number(item.presupuesto!.monto_limite), 0));
+  const gastoTotal = redondearMonto(conLimite.reduce((total, item) => total + item.gastado, 0));
 
   async function copiarDelMesAnterior() {
     if (copiando) return;
@@ -93,7 +93,7 @@ export function PresupuestosProgreso({ items, mesISO, onPresupuestosGuardados }:
             <p className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight mt-2 ${
               limiteTotal < gastoTotal ? "text-rose-400" : "text-emerald-300"
             }`}>
-              {formatearMonto(limiteTotal - gastoTotal)}
+              {formatearMonto(redondearMonto(limiteTotal - gastoTotal))}
             </p>
             <p className="text-[11px] text-slate-500 mt-1">Colchón antes de exceder el límite</p>
           </div>

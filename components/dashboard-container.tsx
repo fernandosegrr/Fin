@@ -18,12 +18,9 @@ import { ToastNotification, type ToastMessage } from "@/components/toast-notific
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import {
-  obtenerCategorias,
   obtenerBalanceMensual,
   obtenerPresupuestosConGasto,
-  obtenerGastosRecurrentes,
-  obtenerClientes,
-  obtenerMetaAhorro,
+  obtenerDatosDashboard,
   crearTransaccion,
   signOut,
   type BalanceMensual,
@@ -140,21 +137,14 @@ export function DashboardContainer({
 
       startTransition(async () => {
         try {
-          const [nuevoBalance, nuevosPresupuestos, nuevosRecurrentes, nuevosClientes, nuevaMeta, nuevasCategorias] = await Promise.all([
-            obtenerBalanceMensual(anioActual, mesActual),
-            obtenerPresupuestosConGasto(anioActual, mesActual),
-            obtenerGastosRecurrentes(),
-            obtenerClientes(),
-            obtenerMetaAhorro(),
-            obtenerCategorias(),
-          ]);
+          const datos = await obtenerDatosDashboard(anioActual, mesActual);
           if (solicitudIdRef.current !== idSolicitud) return;
-          setBalance(nuevoBalance);
-          setPresupuestos(nuevosPresupuestos);
-          setGastosRecurrentes(nuevosRecurrentes);
-          setClientes(nuevosClientes);
-          setMeta(nuevaMeta);
-          setCategorias(nuevasCategorias);
+          setBalance(datos.balance);
+          setPresupuestos(datos.presupuestos);
+          setGastosRecurrentes(datos.gastosRecurrentes);
+          setClientes(datos.clientes);
+          setMeta(datos.meta);
+          setCategorias(datos.categorias);
         } catch (err) {
           if (solicitudIdRef.current !== idSolicitud) return;
           console.error("Error recargando datos del dashboard:", err);
@@ -193,6 +183,7 @@ export function DashboardContainer({
     // "reconexión" (evitaría una recarga redundante justo tras el SSR inicial).
     let estabaConectado = true;
     let algunaVezVivo = false;
+    let ultimoFoco = Date.now();
 
     function suscribir(userId: string) {
       if (canal) supabase.removeChannel(canal);
@@ -229,6 +220,16 @@ export function DashboardContainer({
 
     function alRecuperarActividad() {
       if (cancelado || document.visibilityState !== "visible") return;
+      const ahora = Date.now();
+      // Si la ventana recupera el foco casi de inmediato (primeros 30 s tras
+      // montar el componente o tras el último refresco), no saturar la red con
+      // recargas redundantes. Los datos de SSR aún están frescos y Realtime
+      // ya avisa de cualquier cambio.
+      if (ahora - ultimoFoco < 30_000) {
+        ultimoFoco = ahora;
+        return;
+      }
+      ultimoFoco = ahora;
       recargarDatos();
       if (!estabaConectado) {
         supabase.auth.getSession().then(({ data: { session } }) => {

@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/login"];
+const PUBLIC_ROUTES = ["/login", "/manifest.json", "/sw.js"];
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -14,7 +14,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
   try {
     const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -26,7 +30,19 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({ request });
+          // Reconstruir cabecera "cookie" en request.headers para que los Server Components
+          // de Next.js 15 aguas abajo lean los tokens refrescados en la misma petición (evita
+          // 401 y el error "Invalid Refresh Token: Already Used").
+          const cookieHeader = request.cookies
+            .getAll()
+            .map((c) => `${c.name}=${c.value}`)
+            .join("; ");
+          request.headers.set("cookie", cookieHeader);
+          supabaseResponse = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -55,6 +71,11 @@ export async function updateSession(request: NextRequest) {
       });
       return redirectResponse;
     };
+
+    // Redirección directa desde la raíz preservando cookies actualizadas
+    if (request.nextUrl.pathname === "/") {
+      return redirigirCon(user ? "/dashboard" : "/login");
+    }
 
     if (!user && !isPublicRoute) {
       return redirigirCon("/login");

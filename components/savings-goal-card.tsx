@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Flag, Pencil, Trash2, X, Loader2, Target, Check } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto, parsearMonto } from "@/lib/format";
+import { formatearMonto, parsearMonto, redondearMonto } from "@/lib/format";
 import { useEscapeKey } from "@/lib/use-escape-key";
 import { eliminarMetaAhorro, guardarMetaAhorro } from "@/app/dashboard/actions";
 import type { MetaAhorro } from "@/lib/types";
@@ -67,7 +67,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
 
   const objetivo = meta?.monto_objetivo ?? 0;
   const porcentaje = objetivo > 0 ? Math.min(100, Math.round((Math.max(0, saldoActual) / objetivo) * 100)) : 0;
-  const restante = objetivo - saldoActual;
+  const restante = redondearMonto(objetivo - saldoActual);
 
   return (
     <>
@@ -142,7 +142,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
                 {meta.fecha_limite ? `Límite: ${meta.fecha_limite}` : "Sin fecha límite"}
               </span>
               <span className="font-semibold text-slate-200">
-                {restante > 0 ? `Faltan ${formatearMonto(restante)}` : "¡Meta alcanzada! 🎉"}
+                {restante >= 0.01 ? `Faltan ${formatearMonto(restante)}` : "¡Meta alcanzada! 🎉"}
               </span>
             </div>
           </div>

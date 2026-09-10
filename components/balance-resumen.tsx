@@ -18,7 +18,7 @@ import {
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { AnimatedNumber } from "@/components/react-bits/AnimatedNumber";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto } from "@/lib/format";
+import { formatearMonto, parsearMonto } from "@/lib/format";
 import { formatearFechaCorta, hoyEnMexico, hoyISOEnMexico } from "@/lib/dates";
 import {
   ajustarSaldo,
@@ -113,7 +113,7 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
   async function manejarAjuste(e: React.FormEvent) {
     e.preventDefault();
-    const objetivo = Number.parseFloat(ajusteMonto.replace(",", "."));
+    const objetivo = parsearMonto(ajusteMonto);
     if (!Number.isFinite(objetivo)) {
       setAjusteError("Ingresa el saldo real que tienes.");
       return;
@@ -165,7 +165,7 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
 
   async function manejarEnvioTransferencia(e: React.FormEvent) {
     e.preventDefault();
-    const monto = Number.parseFloat(montoTexto.replace(",", "."));
+    const monto = parsearMonto(montoTexto);
     if (!Number.isFinite(monto) || monto <= 0) {
       setErrorForm("Ingresa un monto válido mayor a 0.");
       return;

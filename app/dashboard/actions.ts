@@ -258,8 +258,10 @@ export async function actualizarTransaccion(
 
   const supabase = await createClient();
   const user = await exigirUsuario(supabase);
-  await exigirCategoriaDelUsuario(supabase, input.categoria_id);
-  if (input.cliente_id) await exigirClienteDelUsuario(supabase, input.cliente_id);
+  const categoria = await exigirCategoriaDelUsuario(supabase, input.categoria_id);
+  if (categoria.tipo === "ingreso" && input.cliente_id) {
+    await exigirClienteDelUsuario(supabase, input.cliente_id);
+  }
 
   const { error } = await supabase
     .from("transacciones")
@@ -268,7 +270,8 @@ export async function actualizarTransaccion(
       monto: redondearMonto(input.monto),
       descripcion: input.descripcion?.trim() || null,
       metodo_pago: metodoPago,
-      cliente_id: input.cliente_id ?? null,
+      cliente_id: categoria.tipo === "ingreso" ? (input.cliente_id ?? null) : null,
+      ...(categoria.tipo === "ingreso" ? { gasto_recurrente_id: null } : {}),
       ...(input.fecha ? { fecha: fechaOHoy(input.fecha) } : {}),
     })
     .eq("id", id)
@@ -582,24 +585,28 @@ async function calcularSaldosHistoricos(
   supabase: Awaited<ReturnType<typeof createClient>>,
   fechaLimite: string,
 ): Promise<SaldosHistoricos> {
-  // Agregación hecha en Postgres (función calcular_saldo_historico, ver
-  // prisma/migrations): suma TODO el historial sin traerlo a Node, así que no
-  // hay techo de filas. El cálculo anterior traía cada transacción histórica
-  // a JS y las sumaba ahí — por encima de las ~1000 filas que Supabase
-  // devuelve por defecto en una consulta normal, el saldo quedaba mal sin
-  // ningún aviso.
-  const { data, error } = await supabase
-    .rpc("calcular_saldo_historico", { p_fecha_limite: fechaLimite })
-    .single();
+  try {
+    // Agregación hecha en Postgres (función calcular_saldo_historico, ver
+    // prisma/migrations): suma TODO el historial sin traerlo a Node.
+    // Usamos maybeSingle() y try/catch para que cualquier fallo transitorio
+    // de red o RPC no reviente toda la carga del dashboard.
+    const { data, error } = await supabase
+      .rpc("calcular_saldo_historico", { p_fecha_limite: fechaLimite })
+      .maybeSingle();
 
-  if (error) throw new Error(`No se pudo calcular el saldo histórico: ${error.message}`);
+    if (error) {
+      console.warn("Aviso: no se pudo calcular saldo histórico vía RPC (usando 0 por defecto):", error.message);
+      return { total: 0, efectivo: 0, tarjeta: 0 };
+    }
 
-  // El cliente de Supabase no está tipado con las funciones RPC del proyecto
-  // (no hay Database generado), así que el resultado llega como `unknown`.
-  const fila = data as unknown as { efectivo: number | string; tarjeta: number | string } | null;
-  const efectivo = redondearMonto(aNumero(fila?.efectivo));
-  const tarjeta = redondearMonto(aNumero(fila?.tarjeta));
-  return { total: redondearMonto(efectivo + tarjeta), efectivo, tarjeta };
+    const fila = data as unknown as { efectivo: number | string; tarjeta: number | string } | null;
+    const efectivo = redondearMonto(aNumero(fila?.efectivo));
+    const tarjeta = redondearMonto(aNumero(fila?.tarjeta));
+    return { total: redondearMonto(efectivo + tarjeta), efectivo, tarjeta };
+  } catch (err) {
+    console.warn("Fallo inesperado al calcular saldo histórico:", err);
+    return { total: 0, efectivo: 0, tarjeta: 0 };
+  }
 }
 
 export interface BalanceMensual {
@@ -813,7 +820,9 @@ export async function obtenerPresupuestosConGasto(
   ]);
 
   if (resCategorias.error) throw new Error(resCategorias.error.message);
-  if (resPresupuestos.error) throw new Error(resPresupuestos.error.message);
+  if (resPresupuestos.error) {
+    console.warn("Aviso: no se pudieron cargar los presupuestos:", resPresupuestos.error.message);
+  }
 
   const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
   const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
@@ -882,6 +891,67 @@ export async function guardarPresupuesto(
       });
       if (error) throw new Error(error.message);
     }
+  }
+
+  revalidatePath("/dashboard");
+}
+
+export interface PresupuestoEntrada {
+  categoria_id: string;
+  monto_limite: number;
+}
+
+/**
+ * Guarda o elimina múltiples presupuestos en una sola petición y un solo revalidatePath.
+ * Evita disparar N Server Actions simultáneas desde el cliente.
+ */
+export async function guardarPresupuestosMultiples(
+  mesISO: string,
+  presupuestos: PresupuestoEntrada[],
+): Promise<void> {
+  if (!esFechaISO(mesISO) || !mesISO.endsWith("-01")) {
+    throw new Error("El mes del presupuesto no es válido.");
+  }
+  if (!Array.isArray(presupuestos) || presupuestos.length === 0) {
+    return;
+  }
+
+  const supabase = await createClient();
+  const user = await exigirUsuario(supabase);
+
+  const aEliminar: string[] = [];
+  const aGuardar: { user_id: string; categoria_id: string; monto_limite: number; mes: string }[] = [];
+
+  for (const item of presupuestos) {
+    if (!item.categoria_id) continue;
+    const monto = Number(item.monto_limite);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      aEliminar.push(item.categoria_id);
+    } else {
+      aGuardar.push({
+        user_id: user.id,
+        categoria_id: item.categoria_id,
+        monto_limite: redondearMonto(monto),
+        mes: mesISO,
+      });
+    }
+  }
+
+  if (aEliminar.length > 0) {
+    const { error } = await supabase
+      .from("presupuestos")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("mes", mesISO)
+      .in("categoria_id", aEliminar);
+    if (error) throw new Error(error.message);
+  }
+
+  if (aGuardar.length > 0) {
+    const { error } = await supabase
+      .from("presupuestos")
+      .upsert(aGuardar, { onConflict: "user_id, categoria_id, mes" });
+    if (error) throw new Error(error.message);
   }
 
   revalidatePath("/dashboard");
@@ -962,22 +1032,26 @@ export async function copiarPresupuestosMesAnterior(
 // ─────────────────────────────────────────────
 
 export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  // Sin getUser()/`.eq("user_id", ...)` a propósito: es una lectura y RLS ya
-  // filtra por auth.uid() automáticamente (igual que obtenerCategorias/
-  // obtenerBalanceMensual). getUser() hace un round-trip de red aparte a
-  // Supabase Auth — costoso repetirlo en cada lectura cuando esta función
-  // corre en paralelo con otras 3 dentro de un mismo Promise.all (carga
-  // inicial del dashboard) y termina siendo la que más tarda.
-  const { data, error } = await supabase
-    .from("gastos_recurrentes")
-    .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-    .order("dia_cobro");
+    // Sin getUser()/`.eq("user_id", ...)` a propósito: es una lectura y RLS ya
+    // filtra por auth.uid() automáticamente.
+    const { data, error } = await supabase
+      .from("gastos_recurrentes")
+      .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+      .order("dia_cobro");
 
-  if (error) throw new Error(`No se pudieron cargar los gastos recurrentes: ${error.message}`);
+    if (error) {
+      console.warn("Aviso: no se pudieron cargar gastos recurrentes:", error.message);
+      return [];
+    }
 
-  return (data ?? []) as unknown as GastoRecurrente[];
+    return (data ?? []) as unknown as GastoRecurrente[];
+  } catch (err) {
+    console.warn("Error inesperado al cargar gastos recurrentes:", err);
+    return [];
+  }
 }
 
 export interface NuevoGastoRecurrente {
@@ -1213,6 +1287,45 @@ export async function obtenerMetaAhorro(): Promise<MetaAhorro | null> {
     nombre: data.nombre as string,
     monto_objetivo: aNumero(data.monto_objetivo),
     fecha_limite: (data.fecha_limite as string | null) ?? null,
+  };
+}
+
+export interface DatosDashboard {
+  balance: BalanceMensual;
+  presupuestos: PresupuestoConGasto[];
+  gastosRecurrentes: GastoRecurrente[];
+  clientes: Cliente[];
+  meta: MetaAhorro | null;
+  categorias: Categoria[];
+}
+
+/**
+ * Carga unificada de TODO el estado del dashboard en una sola Server Action.
+ * Al ejecutarse en el servidor, comparte una única llamada memoizada a createClient(),
+ * evita 6 roundtrips HTTP independientes desde el cliente y previene colisiones
+ * o carreras en la rotación de tokens.
+ */
+export async function obtenerDatosDashboard(
+  anioTarget?: number,
+  mesTarget?: number,
+): Promise<DatosDashboard> {
+  const [balance, presupuestos, categorias, gastosRecurrentes, clientes, meta] =
+    await Promise.all([
+      obtenerBalanceMensual(anioTarget, mesTarget),
+      obtenerPresupuestosConGasto(anioTarget, mesTarget),
+      obtenerCategorias(),
+      obtenerGastosRecurrentes(),
+      obtenerClientes(),
+      obtenerMetaAhorro(),
+    ]);
+
+  return {
+    balance,
+    presupuestos,
+    gastosRecurrentes,
+    clientes,
+    meta,
+    categorias,
   };
 }
 

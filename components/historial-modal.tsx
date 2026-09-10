@@ -31,16 +31,18 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
   const [filasTraspasos, setFilasTraspasos] = useState<Transferencia[]>([]);
   const [totalTraspasos, setTotalTraspasos] = useState(0);
   const [cargando, setCargando] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEscapeKey(abierto, onCerrar);
 
+  const incluirTraspasos = tipo === "todos";
+  const totalGeneral = total + (incluirTraspasos ? totalTraspasos : 0);
+  const hayMas = filas.length < total || (incluirTraspasos && filasTraspasos.length < totalTraspasos);
+
   useEffect(() => {
     if (!abierto) return;
     let cancelado = false;
-    // Un traspaso no es ingreso ni egreso: solo entra en la búsqueda cuando
-    // el filtro de tipo no lo excluye de antemano.
-    const incluirTraspasos = tipo === "todos";
     const t = setTimeout(() => {
       setCargando(true);
       setError(null);
@@ -68,7 +70,31 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
       cancelado = true;
       clearTimeout(t);
     };
-  }, [abierto, busqueda, tipo, metodo]);
+  }, [abierto, busqueda, tipo, metodo, incluirTraspasos]);
+
+  async function cargarMas() {
+    if (cargandoMas || !hayMas) return;
+    setCargandoMas(true);
+    setError(null);
+    try {
+      const [rTx, rTr] = await Promise.all([
+        filas.length < total
+          ? buscarTransacciones({ busqueda, tipo, metodoPago: metodo, limite: 50, offset: filas.length })
+          : Promise.resolve({ filas: [] as TransaccionConCategoria[], total }),
+        incluirTraspasos && filasTraspasos.length < totalTraspasos
+          ? buscarTransferencias({ busqueda, metodoPago: metodo, limite: 50, offset: filasTraspasos.length })
+          : Promise.resolve({ filas: [] as Transferencia[], total: totalTraspasos }),
+      ]);
+      setFilas((prev) => [...prev, ...rTx.filas]);
+      setTotal(rTx.total);
+      setFilasTraspasos((prev) => [...prev, ...rTr.filas]);
+      setTotalTraspasos(rTr.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar más movimientos.");
+    } finally {
+      setCargandoMas(false);
+    }
+  }
 
   const items = useMemo(() => {
     const lista: ItemHistorial[] = [
@@ -160,7 +186,7 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
         </div>
 
         <p className="mt-2 text-[10px] text-slate-500">
-          {cargando ? "Buscando…" : `${items.length} de ${total + totalTraspasos} movimientos`}
+          {cargando ? "Buscando…" : `${items.length} de ${totalGeneral} movimientos`}
         </p>
 
         <div className="mt-2 flex-1 overflow-y-auto space-y-1.5 pr-1">
@@ -236,6 +262,19 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
               </div>
             );
           })}
+          {hayMas && (
+            <div className="pt-2 pb-1 text-center">
+              <button
+                type="button"
+                onClick={cargarMas}
+                disabled={cargandoMas}
+                className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-white/10 text-xs font-bold text-slate-200 hover:text-white transition-all disabled:opacity-50 shadow-sm"
+              >
+                {cargandoMas && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {cargandoMas ? "Cargando más..." : "Cargar más movimientos"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

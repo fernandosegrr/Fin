@@ -1,12 +1,5 @@
 import { DashboardContainer } from "@/components/dashboard-container";
-import {
-  obtenerBalanceMensual,
-  obtenerCategorias,
-  obtenerPresupuestosConGasto,
-  obtenerGastosRecurrentes,
-  obtenerClientes,
-  obtenerMetaAhorro,
-} from "./actions";
+import { obtenerDatosDashboard, type DatosDashboard } from "./actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -21,23 +14,24 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [balance, presupuestos, categorias, gastosRecurrentes, clientes, meta] = await Promise.all([
-    obtenerBalanceMensual(),
-    obtenerPresupuestosConGasto(),
-    obtenerCategorias(),
-    obtenerGastosRecurrentes(),
-    obtenerClientes(),
-    obtenerMetaAhorro(),
-  ]);
+  // Carga con reintento transparente en el servidor ante cold starts o micro-cortes de Supabase
+  let datos: DatosDashboard;
+  try {
+    datos = await obtenerDatosDashboard();
+  } catch (err) {
+    console.warn("Aviso: reintentando carga inicial del dashboard tras fallo transitorio:", err);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    datos = await obtenerDatosDashboard();
+  }
 
   return (
     <DashboardContainer
-      initialBalance={balance}
-      initialPresupuestos={presupuestos}
-      initialGastosRecurrentes={gastosRecurrentes}
-      categorias={categorias}
-      initialClientes={clientes}
-      initialMeta={meta}
+      initialBalance={datos.balance}
+      initialPresupuestos={datos.presupuestos}
+      initialGastosRecurrentes={datos.gastosRecurrentes}
+      categorias={datos.categorias}
+      initialClientes={datos.clientes}
+      initialMeta={datos.meta}
     />
   );
 }

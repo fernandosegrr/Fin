@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { X, Save, ShieldCheck, Check } from "lucide-react";
-import { guardarPresupuesto } from "@/app/dashboard/actions";
+import { guardarPresupuestosMultiples } from "@/app/dashboard/actions";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { formatearMonto } from "@/lib/format";
 import { useEscapeKey } from "@/lib/use-escape-key";
@@ -60,14 +60,13 @@ export function BudgetManagerModal({ abierto, onCerrar, items, mesISO, onGuardad
 
     startTransition(async () => {
       try {
-        await Promise.all(
-          items.map((item) => {
-            const valStr = limites[item.categoria.id] ?? "";
-            const num = Number(valStr);
-            const montoLimite = Number.isFinite(num) && num > 0 ? num : 0;
-            return guardarPresupuesto(item.categoria.id, montoLimite, mesISO);
-          }),
-        );
+        const payload = items.map((item) => {
+          const valStr = limites[item.categoria.id] ?? "";
+          const num = Number(valStr);
+          const montoLimite = Number.isFinite(num) && num > 0 ? num : 0;
+          return { categoria_id: item.categoria.id, monto_limite: montoLimite };
+        });
+        await guardarPresupuestosMultiples(mesISO, payload);
         onGuardado?.();
         setMensajeExito(true);
         setTimeout(() => {

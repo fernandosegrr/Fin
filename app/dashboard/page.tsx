@@ -1,28 +1,31 @@
 import { DashboardContainer } from "@/components/dashboard-container";
-import { obtenerDatosDashboard, type DatosDashboard } from "./actions";
+import { obtenerDatosDashboard } from "./actions";
 import { createClient } from "@/lib/supabase/server";
+import { esErrorTransitorio, reintentarLectura } from "@/lib/supabase/retry";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   // Auth guard explícito — safety net si el middleware falla
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let autenticado: boolean;
+  try {
+    autenticado = await reintentarLectura(async () => {
+      const { data, error } = await supabase.auth.getClaims();
+      if (error && esErrorTransitorio(error)) throw error;
+      return Boolean(data?.claims?.sub);
+    });
+  } catch (error) {
+    console.error("Error definitivo al verificar sesión del dashboard:", error);
+    throw error;
+  }
 
-  if (!user) {
+  if (!autenticado) {
     redirect("/login");
   }
 
-  // Carga con reintento transparente en el servidor ante cold starts o micro-cortes de Supabase
-  let datos: DatosDashboard;
-  try {
-    datos = await obtenerDatosDashboard();
-  } catch (err) {
-    console.warn("Aviso: reintentando carga inicial del dashboard tras fallo transitorio:", err);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    datos = await obtenerDatosDashboard();
-  }
+  const datos = await obtenerDatosDashboard();
 
   return (
     <DashboardContainer

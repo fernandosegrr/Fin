@@ -433,7 +433,6 @@ export function DashboardContainer({
             <div className="overview-grid">
             <BalanceResumen
               actual={balance.actual}
-              anterior={balance.anterior}
               onTransferenciaRealizada={recargarDatos}
             />
             <SavingsGoalCard

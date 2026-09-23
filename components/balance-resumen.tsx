@@ -32,7 +32,6 @@ import type { DesgloseMetodoPago, MetodoPago, Transferencia } from "@/lib/types"
 
 interface Props {
   actual: BalanceMensual["actual"];
-  anterior: BalanceMensual["anterior"];
   onTransferenciaRealizada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
@@ -52,7 +51,6 @@ function DesgloseMetodo({
 }) {
   const arrastre = desglose.saldo - desglose.neto;
   const netoMes = desglose.neto;
-  const netoPositivo = netoMes >= 0;
   return (
     <div className="p-2 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
       <div className="flex items-center justify-between gap-1">
@@ -64,21 +62,22 @@ function DesgloseMetodo({
       <p className="text-[10px] text-slate-500 leading-tight">
         Arrastre {formatearMonto(arrastre)}
         {" · "}
-        <span className={netoPositivo ? "text-emerald-400/80" : "text-rose-400/80"}>
-          {netoPositivo ? "+" : "−"}
-          {formatearMonto(Math.abs(netoMes))} este mes
+        <span className={desglose.saldo < 0 ? "text-rose-400/80" : "text-slate-400"}>
+          {netoMes > 0 ? `Subió ${formatearMonto(netoMes)} este mes` :
+            netoMes < 0 ? `Bajó ${formatearMonto(Math.abs(netoMes))} este mes` : "Sin cambio este mes"}
         </span>
       </p>
     </div>
   );
 }
 
-export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: Props) {
+export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
   const saldoPositivo = actual.saldoTotalDisponible >= 0;
 
-  // Tasa de ahorro (%)
-  const tasaAhorro = actual.ingresos > 0
-    ? Math.max(0, Math.round(((actual.ingresos - actual.egresos) / actual.ingresos) * 100))
+  // Fondos disponibles del mes: incluye el saldo que llegó de meses anteriores.
+  const fondosDelMes = Math.max(0, actual.saldoInicial + actual.ingresos);
+  const porcentajeDisponible = fondosDelMes > 0
+    ? Math.max(0, Math.round((actual.saldoTotalDisponible / fondosDelMes) * 100))
     : 0;
 
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -251,10 +250,10 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
             </div>
           </div>
 
-          {/* Badge de Tasa de Ahorro */}
+          {/* Porcentaje de fondos que permanece disponible */}
           <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300 backdrop-blur-md shrink-0 shadow-sm shadow-emerald-500/10">
             <PiggyBank className="h-3.5 w-3.5" />
-            <span>{tasaAhorro}% ahorrado</span>
+            <span>{porcentajeDisponible}% disponible</span>
           </div>
         </div>
 
@@ -340,15 +339,6 @@ export function BalanceResumen({ actual, anterior, onTransferenciaRealizada }: P
           </div>
         </div>
 
-        {/* Referencia del mes anterior */}
-        {anterior.balance !== 0 && (
-          <div className="mt-4 pt-3 border-t border-white/[0.05] flex items-center justify-between text-[11px] text-slate-400">
-            <span>Mes anterior ({anterior.nombreMes}):</span>
-            <span className="font-semibold tabular-nums text-slate-300">
-              {formatearMonto(anterior.balance)}
-            </span>
-          </div>
-        )}
       </SpotlightCard>
     </section>
 

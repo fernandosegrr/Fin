@@ -16,6 +16,7 @@ import {
 } from "@/lib/dates";
 import { aNumero, formatearMonto, redondearMonto } from "@/lib/format";
 import { traerTodasLasFilas } from "@/lib/supabase/paginar";
+import { reintentarLectura } from "@/lib/supabase/retry";
 import type {
   Categoria,
   Cliente,
@@ -96,7 +97,7 @@ export async function obtenerCategorias(): Promise<Categoria[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("categorias").select("*").order("nombre");
 
-  if (error) throw new Error(`No se pudieron cargar las categorías: ${error.message}`);
+  if (error) throw new Error(`No se pudieron cargar las categorías: ${error.message}`, { cause: error });
   return data ?? [];
 }
 
@@ -425,7 +426,8 @@ const SELECT_LISTA =
 const SELECT_LISTA_SIN_CLIENTE = "*, categoria:categorias(id, nombre, tipo, grupo)";
 
 function esErrorEsquemaClientes(mensaje: string): boolean {
-  return /clientes|cliente_id|schema cache/i.test(mensaje);
+  return /clientes|cliente_id/i.test(mensaje) &&
+    /could not find .* in the schema cache|(?:relation|column) .* does not exist/i.test(mensaje);
 }
 
 async function filasTotalesDelRango(
@@ -585,28 +587,17 @@ async function calcularSaldosHistoricos(
   supabase: Awaited<ReturnType<typeof createClient>>,
   fechaLimite: string,
 ): Promise<SaldosHistoricos> {
-  try {
-    // Agregación hecha en Postgres (función calcular_saldo_historico, ver
-    // prisma/migrations): suma TODO el historial sin traerlo a Node.
-    // Usamos maybeSingle() y try/catch para que cualquier fallo transitorio
-    // de red o RPC no reviente toda la carga del dashboard.
-    const { data, error } = await supabase
-      .rpc("calcular_saldo_historico", { p_fecha_limite: fechaLimite })
-      .maybeSingle();
+  // Un fallo aquí no equivale a saldo cero: mostrarlo así daría información
+  // financiera incorrecta. La carga inicial reintenta esta lectura.
+  const { data, error } = await supabase
+    .rpc("calcular_saldo_historico", { p_fecha_limite: fechaLimite })
+    .single();
+  if (error) throw new Error(`No se pudo calcular el saldo histórico: ${error.message}`, { cause: error });
 
-    if (error) {
-      console.warn("Aviso: no se pudo calcular saldo histórico vía RPC (usando 0 por defecto):", error.message);
-      return { total: 0, efectivo: 0, tarjeta: 0 };
-    }
-
-    const fila = data as unknown as { efectivo: number | string; tarjeta: number | string } | null;
-    const efectivo = redondearMonto(aNumero(fila?.efectivo));
-    const tarjeta = redondearMonto(aNumero(fila?.tarjeta));
-    return { total: redondearMonto(efectivo + tarjeta), efectivo, tarjeta };
-  } catch (err) {
-    console.warn("Fallo inesperado al calcular saldo histórico:", err);
-    return { total: 0, efectivo: 0, tarjeta: 0 };
-  }
+  const fila = data as unknown as { efectivo: number | string; tarjeta: number | string };
+  const efectivo = redondearMonto(aNumero(fila.efectivo));
+  const tarjeta = redondearMonto(aNumero(fila.tarjeta));
+  return { total: redondearMonto(efectivo + tarjeta), efectivo, tarjeta };
 }
 
 export interface BalanceMensual {
@@ -616,7 +607,6 @@ export interface BalanceMensual {
     /** Total real de movimientos del mes (puede ser mayor que `transacciones.length` si se alcanzó el límite de 200). */
     totalTransaccionesMes: number;
   };
-  anterior: ResumenMes & { nombreMes: string };
 }
 
 /**
@@ -676,18 +666,15 @@ export async function obtenerBalanceMensual(
   const mes = mesTarget ?? hoy.mes;
   if (!esMesCalendario(anio, mes)) throw new Error("Selecciona un mes válido entre 2000 y 2100.");
 
-  const anteriorYM = mesAnterior(anio, mes);
   const rangoActual = rangoDelMes(anio, mes);
-  const rangoAnterior = rangoDelMes(anteriorYM.anio, anteriorYM.mes);
 
   // Cargamos, todo en paralelo:
   // - la LISTA de transacciones del mes actual a mostrar (limitada a 200 filas
   //   por rendimiento de UI — NO se usa para calcular totales, ver abajo)
   // - los TOTALES del mes actual, sin límite de filas (monto+metodo+tipo nada más)
-  // - las transacciones del mes anterior (para la comparación), sin límite
   // - los traspasos del mes actual
   // - el saldo histórico acumulado por método, agregado en la base de datos
-  const [resListaInicial, filasTotalesActual, filasAnterior, transferenciasActual, saldosHistoricos] =
+  const [resListaInicial, filasTotalesActual, transferenciasActual, saldosHistoricos] =
     await Promise.all([
       supabase
         .from("transacciones")
@@ -702,7 +689,6 @@ export async function obtenerBalanceMensual(
         .order("creado_en", { ascending: false })
         .limit(200),
       filasTotalesDelRango(supabase, rangoActual.inicio, rangoActual.finExclusivo, "No se pudieron calcular los totales del mes"),
-      filasTotalesDelRango(supabase, rangoAnterior.inicio, rangoAnterior.finExclusivo, "No se pudo cargar el mes anterior"),
       traerTodasLasFilas<Transferencia>(
         (desde, hasta) =>
           supabase
@@ -729,15 +715,13 @@ export async function obtenerBalanceMensual(
       .limit(200);
   }
   if (resLista.error) {
-    throw new Error(`No se pudieron cargar las transacciones del mes: ${resLista.error.message}`);
+    throw new Error(`No se pudieron cargar las transacciones del mes: ${resLista.error.message}`, { cause: resLista.error });
   }
 
   const transaccionesActual = (resLista.data ?? []) as unknown as TransaccionConCategoria[];
 
   const totalesActual = calcularTotalesDetallados(filasTotalesActual);
   aplicarTransferencias(totalesActual, transferenciasActual);
-
-  const totalesAnterior = calcularTotalesDetallados(filasAnterior);
 
   const balanceNetoActual = totalesActual.ingresos - totalesActual.egresos;
 
@@ -767,24 +751,6 @@ export async function obtenerBalanceMensual(
       recurrentesCobrados: totalesActual.recurrentesCobrados,
       transacciones: transaccionesActual,
       totalTransaccionesMes: resLista.count ?? transaccionesActual.length,
-    },
-    anterior: {
-      anio: anteriorYM.anio,
-      mes: anteriorYM.mes,
-      nombreMes: nombreDelMes(anteriorYM.anio, anteriorYM.mes),
-      ingresos: totalesAnterior.ingresos,
-      egresos: totalesAnterior.egresos,
-      balance: totalesAnterior.ingresos - totalesAnterior.egresos,
-      saldoInicial: 0,
-      saldoTotalDisponible: totalesAnterior.ingresos - totalesAnterior.egresos,
-      totalesEfectivo: { ...totalesAnterior.efectivo, saldo: totalesAnterior.efectivo.neto },
-      totalesTarjeta: { ...totalesAnterior.tarjeta, saldo: totalesAnterior.tarjeta.neto },
-      transferencias: [],
-      egresosFijos: totalesAnterior.egresosFijos,
-      egresosVariables: totalesAnterior.egresosVariables,
-      egresosPorCategoria: totalesAnterior.egresosPorCategoria,
-      ingresosPorCliente: totalesAnterior.ingresosPorCliente,
-      recurrentesCobrados: totalesAnterior.recurrentesCobrados,
     },
   };
 }
@@ -819,10 +785,8 @@ export async function obtenerPresupuestosConGasto(
     ),
   ]);
 
-  if (resCategorias.error) throw new Error(resCategorias.error.message);
-  if (resPresupuestos.error) {
-    console.warn("Aviso: no se pudieron cargar los presupuestos:", resPresupuestos.error.message);
-  }
+  if (resCategorias.error) throw new Error(`No se pudieron cargar las categorías del presupuesto: ${resCategorias.error.message}`, { cause: resCategorias.error });
+  if (resPresupuestos.error) throw new Error(`No se pudieron cargar los presupuestos: ${resPresupuestos.error.message}`, { cause: resPresupuestos.error });
 
   const categoriasEgreso = (resCategorias.data ?? []) as Categoria[];
   const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
@@ -1032,26 +996,16 @@ export async function copiarPresupuestosMesAnterior(
 // ─────────────────────────────────────────────
 
 export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
 
-    // Sin getUser()/`.eq("user_id", ...)` a propósito: es una lectura y RLS ya
-    // filtra por auth.uid() automáticamente.
-    const { data, error } = await supabase
-      .from("gastos_recurrentes")
-      .select("*, categoria:categorias(id, nombre, tipo, grupo)")
-      .order("dia_cobro");
+  // RLS ya filtra por auth.uid(); un error de lectura no significa lista vacía.
+  const { data, error } = await supabase
+    .from("gastos_recurrentes")
+    .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+    .order("dia_cobro");
 
-    if (error) {
-      console.warn("Aviso: no se pudieron cargar gastos recurrentes:", error.message);
-      return [];
-    }
-
-    return (data ?? []) as unknown as GastoRecurrente[];
-  } catch (err) {
-    console.warn("Error inesperado al cargar gastos recurrentes:", err);
-    return [];
-  }
+  if (error) throw new Error(`No se pudieron cargar los gastos recurrentes: ${error.message}`, { cause: error });
+  return (data ?? []) as unknown as GastoRecurrente[];
 }
 
 export interface NuevoGastoRecurrente {
@@ -1229,7 +1183,7 @@ export async function obtenerClientes(): Promise<Cliente[]> {
   const { data, error } = await supabase.from("clientes").select("id, user_id, nombre").order("nombre");
   if (error) {
     if (esErrorEsquemaClientes(error.message)) return [];
-    throw new Error(`No se pudieron cargar los clientes: ${error.message}`);
+    throw new Error(`No se pudieron cargar los clientes: ${error.message}`, { cause: error });
   }
   return (data ?? []) as Cliente[];
 }
@@ -1278,8 +1232,9 @@ export async function obtenerMetaAhorro(): Promise<MetaAhorro | null> {
     .select("id, nombre, monto_objetivo, fecha_limite")
     .maybeSingle();
   if (error) {
-    if (esErrorEsquemaClientes(error.message) || /metas_ahorro/i.test(error.message)) return null;
-    throw new Error(`No se pudo cargar la meta de ahorro: ${error.message}`);
+    if (/metas_ahorro/i.test(error.message) &&
+      /could not find .* in the schema cache|relation .* does not exist/i.test(error.message)) return null;
+    throw new Error(`No se pudo cargar la meta de ahorro: ${error.message}`, { cause: error });
   }
   if (!data) return null;
   return {
@@ -1309,14 +1264,27 @@ export async function obtenerDatosDashboard(
   anioTarget?: number,
   mesTarget?: number,
 ): Promise<DatosDashboard> {
-  const [balance, presupuestos, categorias, gastosRecurrentes, clientes, meta] =
+  async function cargar<T>(etapa: string, leer: () => Promise<T>): Promise<T> {
+    try {
+      return await reintentarLectura(leer);
+    } catch (error) {
+      console.error(`Error definitivo al cargar dashboard (${etapa}):`, error);
+      throw error;
+    }
+  }
+
+  // Workers permite seis conexiones salientes simultáneas. El balance abre
+  // cuatro consultas y las otras dos lecturas completan el primer grupo.
+  const [balance, categorias, gastosRecurrentes] =
     await Promise.all([
-      obtenerBalanceMensual(anioTarget, mesTarget),
-      obtenerPresupuestosConGasto(anioTarget, mesTarget),
-      obtenerCategorias(),
-      obtenerGastosRecurrentes(),
-      obtenerClientes(),
-      obtenerMetaAhorro(),
+      cargar("balance", () => obtenerBalanceMensual(anioTarget, mesTarget)),
+      cargar("categorias", obtenerCategorias),
+      cargar("gastos recurrentes", obtenerGastosRecurrentes),
+    ]);
+  const [presupuestos, clientes, meta] = await Promise.all([
+      cargar("presupuestos", () => obtenerPresupuestosConGasto(anioTarget, mesTarget)),
+      cargar("clientes", obtenerClientes),
+      cargar("meta de ahorro", obtenerMetaAhorro),
     ]);
 
   return {

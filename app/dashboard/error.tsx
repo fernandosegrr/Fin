@@ -1,38 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-// Marca de tiempo del último reintento AUTOMÁTICO, a nivel de módulo (no de
-// estado): este componente se vuelve a montar en cada error, así que un flag
-// en useState se reiniciaría y podría entrar en bucle de reintentos.
-let ultimoReintentoAutomatico = 0;
-const ESPERA_ENTRE_REINTENTOS_MS = 15_000;
-const RETARDO_REINTENTO_MS = 700;
+// sessionStorage sobrevive a una recarga de la página: limita el reintento
+// automático incluso cuando el error reaparece tras recargar el documento.
+const CLAVE_REINTENTO = "nexfin-dashboard-reintento";
+const ESPERA_ENTRE_REINTENTOS_MS = 30_000;
+const RETARDO_REINTENTO_MS = 900;
 
 export default function ErrorDashboard({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
 }) {
   // No exponemos error.message en producción para evitar filtrar detalles internos
   const isDev = process.env.NODE_ENV === "development";
   const [reintentando, setReintentando] = useState(false);
-  const resetRef = useRef(reset);
-  resetRef.current = reset;
 
-  // La causa más común de que esta pantalla aparezca es transitoria (la sesión
-  // de Supabase se refresca justo al abrir la app tras un rato cerrada), y a
-  // la segunda ya carga. Reintentar solo una vez, y como máximo cada 15 s,
-  // convierte ese caso en un parpadeo en vez de un muro de error — sin
-  // arriesgar un bucle si el fallo resulta ser permanente.
+  // Al reabrir la app el navegador hace una petición nueva con las cookies
+  // recién actualizadas. Hacemos esa misma recarga una sola vez ante el error.
   useEffect(() => {
-    const ahora = Date.now();
-    if (ahora - ultimoReintentoAutomatico < ESPERA_ENTRE_REINTENTOS_MS) return;
-    ultimoReintentoAutomatico = ahora;
+    try {
+      const ultimo = Number(sessionStorage.getItem(CLAVE_REINTENTO) ?? 0);
+      if (Date.now() - ultimo < ESPERA_ENTRE_REINTENTOS_MS) return;
+    } catch {
+      return;
+    }
     setReintentando(true);
-    const t = setTimeout(() => resetRef.current(), RETARDO_REINTENTO_MS);
+    const t = setTimeout(() => {
+      try {
+        const ahora = Date.now();
+        const ultimo = Number(sessionStorage.getItem(CLAVE_REINTENTO) ?? 0);
+        if (ahora - ultimo < ESPERA_ENTRE_REINTENTOS_MS) {
+          setReintentando(false);
+          return;
+        }
+        sessionStorage.setItem(CLAVE_REINTENTO, String(ahora));
+        window.location.reload();
+      } catch {
+        setReintentando(false);
+      }
+    }, RETARDO_REINTENTO_MS);
     return () => clearTimeout(t);
   }, []);
 
@@ -60,7 +68,7 @@ export default function ErrorDashboard({
       )}
       <button
         type="button"
-        onClick={reset}
+        onClick={() => window.location.reload()}
         className="mt-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-white transition-all shadow-lg shadow-emerald-600/25"
       >
         Reintentar

@@ -21,7 +21,7 @@ export async function traerTodasLasFilas<T>(
   const filas: T[] = [];
   for (let desde = 0; ; desde += TAM_PAGINA_POSTGREST) {
     const { data, error } = await consultarPagina(desde, desde + TAM_PAGINA_POSTGREST - 1);
-    if (error) throw new Error(`${mensajeError}: ${error.message}`);
+    if (error) throw new Error(`${mensajeError}: ${error.message}`, { cause: error });
     const pagina = (data ?? []) as T[];
     filas.push(...pagina);
     if (pagina.length < TAM_PAGINA_POSTGREST) break;

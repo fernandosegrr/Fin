@@ -13,8 +13,8 @@ import type { RecurringExpensesProps } from "@/components/recurring/use-recurrin
 import type { TabId } from "@/components/dashboard-navigation";
 import type { useDashboardData } from "./use-dashboard-data";
 
-const FinancialCharts = dynamic(() => import("../financial-charts").then(m => m.FinancialCharts), { loading: () => <p role="status" className="p-6 text-slate-400">Cargando gráficas…</p> });
-const AsesorChat = dynamic(() => import("../asesor-chat").then(m => m.AsesorChat), { loading: () => <p role="status" className="p-6 text-slate-400">Abriendo asesor…</p> });
+const FinancialCharts = dynamic(() => import("../financial-charts").then(m => m.FinancialCharts), { loading: () => <p role="status" className="p-6 text-[#5E7165]">Cargando gráficas…</p> });
+const AsesorChat = dynamic(() => import("../asesor-chat").then(m => m.AsesorChat), { loading: () => <p role="status" className="p-6 text-[#5E7165]">Abriendo asesor…</p> });
 
 interface Props {
   tabActiva: TabId;

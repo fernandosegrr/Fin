@@ -42,17 +42,17 @@ function DesgloseMetodo({
   const arrastre = desglose.saldo - desglose.neto;
   const netoMes = desglose.neto;
   return (
-    <div className="p-2 rounded-xl bg-slate-950/50 border border-white/5 space-y-1">
+    <div className="p-2 rounded-xl bg-[#F7F9F5] border border-[#DCE4DB] space-y-1">
       <div className="flex items-center justify-between gap-1">
-        <span className="flex items-center gap-1.5 text-slate-400 font-medium truncate">
+        <span className="flex items-center gap-1.5 text-[#5E7165] font-medium truncate">
           {icono} {etiqueta}:
         </span>
-        <span className="font-bold tabular-nums text-slate-200">{formatearMonto(desglose.saldo)}</span>
+        <span className="font-bold tabular-nums text-[#263D33]">{formatearMonto(desglose.saldo)}</span>
       </div>
-      <p className="text-[10px] text-slate-500 leading-tight">
+      <p className="text-[10px] text-[#7A897D] leading-tight">
         Arrastre {formatearMonto(arrastre)}
         {" · "}
-        <span className={desglose.saldo < 0 ? "text-rose-400/80" : "text-slate-400"}>
+        <span className={desglose.saldo < 0 ? "text-[#AA524A]/80" : "text-[#5E7165]"}>
           {netoMes > 0 ? `Subió ${formatearMonto(netoMes)} este mes` :
             netoMes < 0 ? `Bajó ${formatearMonto(Math.abs(netoMes))} este mes` : "Sin cambio este mes"}
         </span>
@@ -76,33 +76,26 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
     <section className="pt-2">
       <SpotlightCard
         spotlightColor={saldoPositivo ? "rgba(16, 244, 177, 0.15)" : "rgba(244, 63, 94, 0.15)"}
-        className="relative overflow-hidden bg-gradient-to-br from-slate-900/95 via-slate-900/75 to-slate-950/95 border border-white/[0.08] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/40"
+        className="relative overflow-hidden bg-white border border-[#DCE4DB] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/5"
       >
-        {/* Glow sutil de fondo */}
-        <div
-          className={`absolute -right-16 -top-16 h-52 w-52 rounded-full blur-3xl opacity-20 pointer-events-none transition-all duration-700 ${
-            saldoPositivo ? "bg-emerald-500" : "bg-rose-500"
-          }`}
-        />
-
         {/* Encabezado del Balance */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 shadow-sm shadow-emerald-500/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-[#286F50] shrink-0 shadow-sm shadow-emerald-500/10">
               <Wallet className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block leading-tight">
-                Saldo Total Disponible
+              <span className="block text-sm font-semibold leading-tight text-[#1C3028]">
+                Saldo disponible
               </span>
-              <span className="text-[10px] text-slate-500 font-medium">
-                Patrimonio líquido acumulado
+              <span className="text-xs text-[#5E7165]">
+                Total acumulado hasta este mes
               </span>
             </div>
           </div>
 
           {/* Porcentaje de fondos que permanece disponible */}
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300 backdrop-blur-md shrink-0 shadow-sm shadow-emerald-500/10">
+          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-[#286F50] backdrop-blur-md shrink-0 shadow-sm shadow-emerald-500/10">
             <PiggyBank className="h-3.5 w-3.5" />
             <span>{porcentajeDisponible}% disponible</span>
           </div>
@@ -111,8 +104,8 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
         {/* Monto principal: Saldo Total Disponible Acumulado */}
         <div className="mt-4 flex items-baseline gap-2">
           <div
-            className={`text-3xl sm:text-5xl font-black tracking-tight tabular-nums ${
-              saldoPositivo ? "text-slate-100" : "text-rose-400"
+            className={`text-4xl sm:text-5xl font-bold tracking-tight tabular-nums ${
+              saldoPositivo ? "text-[#1C3028]" : "text-[#AA524A]"
             }`}
           >
             <AnimatedNumber value={actual.saldoTotalDisponible} />
@@ -121,55 +114,55 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
         {/* Linea de Arrastre de Meses Anteriores */}
         {actual.saldoInicial !== 0 && (
-          <div className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-indigo-300">
-            <History className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-[#62688B]">
+            <History className="h-3.5 w-3.5 text-[#62688B]" />
             <span>Arrastre meses anteriores: <strong>{formatearMonto(actual.saldoInicial)}</strong></span>
           </div>
         )}
 
         {/* Grid de Egresos e Ingresos del Mes */}
-        <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.07]">
+        <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-[#DCE4DB]">
           {/* Egresos */}
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-950/20 p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-rose-500/35">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+          <div className="rounded-2xl border border-rose-500/20 bg-[#FCF0ED] p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-rose-500/35">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#AA524A]">
               <ArrowDownRight className="h-4 w-4 text-rose-500 shrink-0" />
               <span className="truncate">Egresos del Mes</span>
             </div>
-            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-slate-100 truncate">
+            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-[#1C3028] truncate">
               <AnimatedNumber value={actual.egresos} />
             </p>
           </div>
 
           {/* Ingresos */}
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-emerald-500/35">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-              <ArrowUpRight className="h-4 w-4 text-emerald-500 shrink-0" />
+          <div className="rounded-2xl border border-emerald-500/20 bg-[#EDF5EF] p-3 sm:p-4 backdrop-blur-sm transition-all hover:border-emerald-500/35">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#286F50]">
+              <ArrowUpRight className="h-4 w-4 text-[#286F50] shrink-0" />
               <span className="truncate">Ingresos del Mes</span>
             </div>
-            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-slate-100 truncate">
+            <p className="mt-1.5 text-lg sm:text-2xl font-black tabular-nums text-[#1C3028] truncate">
               <AnimatedNumber value={actual.ingresos} />
             </p>
           </div>
         </div>
 
         {/* Desglose por Método de Pago: Efectivo vs Tarjeta / Banco */}
-        <div className="mt-4 pt-4 border-t border-white/[0.07]">
+        <div className="mt-4 pt-4 border-t border-[#DCE4DB]">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5E7165]">
               Saldo por método de pago
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={abrirModalAjuste}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-amber-300 hover:bg-amber-500/20 hover:text-white transition-all shadow-sm"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold text-[#A66E31] hover:bg-amber-500/20 hover:text-[#1C3028] transition-all shadow-sm"
               >
                 <Scale className="h-3 w-3" /> Ajustar
               </button>
               <button
                 type="button"
                 onClick={abrirModalTransferencia}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-all shadow-sm"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-bold text-[#62688B] hover:bg-indigo-500/20 hover:text-[#1C3028] transition-all shadow-sm"
               >
                 <ArrowRightLeft className="h-3 w-3" /> Transferir
               </button>
@@ -178,12 +171,12 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
           <div className="grid grid-cols-2 gap-2.5 text-[11px]">
             <DesgloseMetodo
-              icono={<Banknote className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
+              icono={<Banknote className="h-3.5 w-3.5 text-[#A66E31] shrink-0" />}
               etiqueta="Efectivo"
               desglose={actual.totalesEfectivo}
             />
             <DesgloseMetodo
-              icono={<CreditCard className="h-3.5 w-3.5 text-cyan-400 shrink-0" />}
+              icono={<CreditCard className="h-3.5 w-3.5 text-[#317D7D] shrink-0" />}
               etiqueta="Tarjeta/Banco"
               desglose={actual.totalesTarjeta}
             />
@@ -196,7 +189,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
     {/* Modal de Traspaso entre métodos de pago */}
     {modalAbierto && (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251D]/45 backdrop-blur-md"
         onClick={(e) => {
           if (e.target === e.currentTarget) setModalAbierto(false);
         }}
@@ -205,18 +198,18 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-traspaso"
-          className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl overflow-hidden"
+          className="w-full max-w-sm rounded-3xl border border-[#DCE4DB] bg-white p-6 shadow-2xl overflow-hidden"
         >
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h3 id="titulo-traspaso" className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <ArrowRightLeft className="h-4 w-4 text-indigo-400" />
+          <div className="flex items-center justify-between pb-3 border-b border-[#DCE4DB]">
+            <h3 id="titulo-traspaso" className="text-sm font-bold text-[#1C3028] flex items-center gap-2">
+              <ArrowRightLeft className="h-4 w-4 text-[#62688B]" />
               {transferenciaEditandoId ? "Editar traspaso" : "Traspasar entre cuentas"}
             </h3>
             <button
               type="button"
               onClick={() => setModalAbierto(false)}
               aria-label="Cerrar"
-              className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              className="rounded-full p-1.5 text-[#5E7165] hover:bg-[#E8EEE7] hover:text-[#1C3028]"
             >
               <X className="h-4 w-4" />
             </button>
@@ -224,7 +217,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
           <form onSubmit={manejarEnvioTransferencia} className="mt-4 space-y-3.5">
             {transferenciaEditandoId && (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[11px] text-indigo-300">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-[11px] text-[#62688B]">
                 <span>Corrigiendo un traspaso existente.</span>
                 <button
                   type="button"
@@ -238,7 +231,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
             {/* Origen -> Destino */}
             <div>
-              <span className="block text-xs font-medium text-slate-400 mb-1">Desde</span>
+              <span className="block text-xs font-medium text-[#5E7165] mb-1">Desde</span>
               <div role="group" aria-label="Cuenta de origen" className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -246,11 +239,11 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                   onClick={() => setOrigen("tarjeta")}
                   className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                     origen === "tarjeta"
-                      ? "bg-indigo-600/20 border-indigo-500 text-indigo-300"
-                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                      ? "bg-indigo-600/20 border-indigo-500 text-[#62688B]"
+                      : "bg-[#F7F9F5] border-[#DCE4DB] text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
-                  <CreditCard className="h-4 w-4 text-cyan-400" />
+                  <CreditCard className="h-4 w-4 text-[#317D7D]" />
                   Tarjeta
                 </button>
                 <button
@@ -259,33 +252,33 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                   onClick={() => setOrigen("efectivo")}
                   className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                     origen === "efectivo"
-                      ? "bg-amber-600/20 border-amber-500 text-amber-300"
-                      : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                      ? "bg-amber-600/20 border-amber-500 text-[#A66E31]"
+                      : "bg-[#F7F9F5] border-[#DCE4DB] text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
-                  <Banknote className="h-4 w-4 text-amber-400" />
+                  <Banknote className="h-4 w-4 text-[#A66E31]" />
                   Efectivo
                 </button>
               </div>
-              <p className="mt-1.5 text-[11px] text-slate-500">
+              <p className="mt-1.5 text-[11px] text-[#7A897D]">
                 Disponible en {NOMBRE_METODO[origen]}:{" "}
-                <span className="font-semibold text-slate-300">
+                <span className="font-semibold text-[#475C50]">
                   {formatearMonto(origen === "efectivo" ? actual.totalesEfectivo.saldo : actual.totalesTarjeta.saldo)}
                 </span>
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="flex items-center justify-center gap-2 text-[11px] font-bold text-[#7A897D] uppercase tracking-wider">
               <span>{NOMBRE_METODO[origen]}</span>
-              <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-400" />
+              <ArrowRightLeft className="h-3.5 w-3.5 text-[#62688B]" />
               <span>{NOMBRE_METODO[destino]}</span>
             </div>
 
             {/* Monto */}
             <div>
-              <label htmlFor="traspaso-monto" className="block text-xs font-medium text-slate-400 mb-1">Monto a traspasar</label>
-              <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-indigo-400/60">
-                <span className="text-lg font-bold text-slate-400 mr-2">$</span>
+              <label htmlFor="traspaso-monto" className="block text-xs font-medium text-[#5E7165] mb-1">Monto a traspasar</label>
+              <div className="relative flex items-center rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] px-4 py-2.5 focus-within:border-indigo-400/60">
+                <span className="text-lg font-bold text-[#5E7165] mr-2">$</span>
                 <input
                   id="traspaso-monto"
                   type="text"
@@ -294,38 +287,38 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                   value={montoTexto}
                   onChange={(e) => setMontoTexto(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-transparent text-xl font-bold text-slate-100 placeholder:text-slate-700 focus:outline-none tabular-nums"
+                  className="w-full bg-transparent text-xl font-bold text-[#1C3028] placeholder:text-[#9CA99F] focus:outline-none tabular-nums"
                 />
               </div>
             </div>
 
             {/* Descripción */}
             <div>
-              <label htmlFor="traspaso-descripcion" className="block text-xs font-medium text-slate-400 mb-1">Descripción (opcional)</label>
+              <label htmlFor="traspaso-descripcion" className="block text-xs font-medium text-[#5E7165] mb-1">Descripción (opcional)</label>
               <input
                 id="traspaso-descripcion"
                 type="text"
                 placeholder="Ej. Retiro de cajero, Depósito..."
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-400/60 focus:outline-none"
+                className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] px-4 py-2.5 text-sm text-[#1C3028] placeholder:text-[#96A399] focus:border-indigo-400/60 focus:outline-none"
               />
             </div>
 
             {/* Fecha */}
             <div>
-              <label htmlFor="traspaso-fecha" className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
+              <label htmlFor="traspaso-fecha" className="block text-xs font-medium text-[#5E7165] mb-1">Fecha</label>
               <input
                 id="traspaso-fecha"
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-indigo-400/60 focus:outline-none"
+                className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] px-4 py-2.5 text-sm text-[#1C3028] focus:border-indigo-400/60 focus:outline-none"
               />
             </div>
 
             {errorForm && (
-              <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+              <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-[#AA524A]">
                 {errorForm}
               </p>
             )}
@@ -341,8 +334,8 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
             </div>
 
             {actual.transferencias.length > 0 && (
-              <div className="pt-3 border-t border-white/5">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              <div className="pt-3 border-t border-[#DCE4DB]">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A897D] mb-1.5">
                   Traspasos este mes · toca uno para corregirlo
                 </p>
                 <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
@@ -355,14 +348,14 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                       className={`flex w-full items-center justify-between gap-2 text-[11px] px-2.5 py-1.5 rounded-lg border transition-colors text-left ${
                         transferenciaEditandoId === t.id
                           ? "bg-indigo-600/10 border-indigo-500/50"
-                          : "bg-slate-950/50 border-white/5 hover:border-white/20"
+                          : "bg-[#F7F9F5] border-[#DCE4DB] hover:border-[#CBD6CA]"
                       }`}
                     >
-                      <span className="text-slate-400 min-w-0 truncate">
+                      <span className="text-[#5E7165] min-w-0 truncate">
                         {formatearFechaCorta(t.fecha)} · {NOMBRE_METODO[t.origen]} → {NOMBRE_METODO[t.destino]}
                       </span>
                       <span className="flex items-center gap-1.5 shrink-0">
-                        <span className="font-semibold tabular-nums text-slate-200">
+                        <span className="font-semibold tabular-nums text-[#263D33]">
                           {formatearMonto(t.monto)}
                         </span>
                         <span
@@ -380,7 +373,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                           }}
                           aria-label="Eliminar traspaso"
                           aria-disabled={eliminandoId === t.id}
-                          className="p-0.5 text-slate-500 hover:text-rose-400 aria-disabled:opacity-50"
+                          className="p-0.5 text-[#7A897D] hover:text-[#AA524A] aria-disabled:opacity-50"
                         >
                           {eliminandoId === t.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -401,22 +394,22 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
     {modalAjuste && (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251D]/45 backdrop-blur-md"
         onClick={(e) => {
           if (e.target === e.currentTarget) setModalAjuste(false);
         }}
       >
-        <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6">
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <Scale className="h-4 w-4 text-amber-400" /> Ajustar saldo
+        <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-[#DCE4DB] bg-white p-6">
+          <div className="flex items-center justify-between pb-3 border-b border-[#DCE4DB]">
+            <h3 className="text-sm font-bold text-[#1C3028] flex items-center gap-2">
+              <Scale className="h-4 w-4 text-[#A66E31]" /> Ajustar saldo
             </h3>
-            <button type="button" onClick={() => setModalAjuste(false)} aria-label="Cerrar" className="p-1.5 text-slate-400 hover:text-white">
+            <button type="button" onClick={() => setModalAjuste(false)} aria-label="Cerrar" className="p-1.5 text-[#5E7165] hover:text-[#1C3028]">
               <X className="h-4 w-4" />
             </button>
           </div>
           <form onSubmit={manejarAjuste} className="mt-4 space-y-3.5">
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-[#5E7165]">
               Pon lo que tienes de verdad hoy. Se crea un ajuste (ingreso o egreso) para cuadrar, sin borrar el historial.
             </p>
             <div role="group" aria-label="Cuenta para ajustar" className="grid grid-cols-2 gap-2">
@@ -429,8 +422,8 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                 }}
                 className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border text-xs font-semibold ${
                   ajusteMetodo === "efectivo"
-                    ? "bg-amber-600/20 border-amber-500 text-amber-300"
-                    : "bg-slate-950/60 border-white/5 text-slate-400"
+                    ? "bg-amber-600/20 border-amber-500 text-[#A66E31]"
+                    : "bg-[#F7F9F5] border-[#DCE4DB] text-[#5E7165]"
                 }`}
               >
                 <Banknote className="h-4 w-4" /> Efectivo
@@ -444,17 +437,17 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                 }}
                 className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border text-xs font-semibold ${
                   ajusteMetodo === "tarjeta"
-                    ? "bg-cyan-600/20 border-cyan-500 text-cyan-300"
-                    : "bg-slate-950/60 border-white/5 text-slate-400"
+                    ? "bg-cyan-600/20 border-cyan-500 text-[#317D7D]"
+                    : "bg-[#F7F9F5] border-[#DCE4DB] text-[#5E7165]"
                 }`}
               >
                 <CreditCard className="h-4 w-4" /> Tarjeta
               </button>
             </div>
             <div>
-              <label htmlFor="ajuste-saldo" className="block text-xs font-medium text-slate-400 mb-1">Saldo real</label>
-              <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-amber-400/60">
-                <span className="text-lg font-bold text-slate-400 mr-2">$</span>
+              <label htmlFor="ajuste-saldo" className="block text-xs font-medium text-[#5E7165] mb-1">Saldo real</label>
+              <div className="relative flex items-center rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] px-4 py-2.5 focus-within:border-amber-400/60">
+                <span className="text-lg font-bold text-[#5E7165] mr-2">$</span>
                 <input
                   id="ajuste-saldo"
                   type="text"
@@ -462,12 +455,12 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                   value={ajusteMonto}
                   onChange={(e) => setAjusteMonto(e.target.value)}
                   placeholder="3000"
-                  className="w-full bg-transparent text-xl font-bold text-slate-100 focus:outline-none tabular-nums"
+                  className="w-full bg-transparent text-xl font-bold text-[#1C3028] focus:outline-none tabular-nums"
                 />
               </div>
             </div>
             {ajusteError && (
-              <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">{ajusteError}</p>
+              <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-[#AA524A]">{ajusteError}</p>
             )}
             <GlowButton type="submit" variant="primary" disabled={ajusteSaving} className="w-full">
               {ajusteSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}

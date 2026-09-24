@@ -22,7 +22,7 @@ export function BudgetManagerModal(props: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251D]/45 backdrop-blur-md"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCerrar();
       }}
@@ -31,16 +31,16 @@ export function BudgetManagerModal(props: Props) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-gestion-presupuestos"
-          className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col max-h-[85vh]"
+          className="w-full max-w-lg rounded-3xl border border-[#DCE4DB] bg-white p-6 shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col max-h-[85vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-white/[0.08]">
+          <div className="flex items-center justify-between pb-4 border-b border-[#DCE4DB]">
             <div>
-              <h2 id="titulo-gestion-presupuestos" className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-400" />
+              <h2 id="titulo-gestion-presupuestos" className="text-base sm:text-lg font-black text-[#1C3028] flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-[#286F50]" />
                 Gestión de Presupuestos
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-[#5E7165] mt-0.5">
                 Establece límites de gasto para cada categoría de egreso.
               </p>
             </div>
@@ -48,20 +48,20 @@ export function BudgetManagerModal(props: Props) {
               type="button"
               onClick={onCerrar}
               aria-label="Cerrar"
-              className="rounded-xl p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
+              className="rounded-xl p-1.5 text-[#5E7165] hover:bg-[#F4F7F2] hover:text-[#1C3028] transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {error && (
-            <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
+            <div className="mt-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-[#AA524A]">
               {error}
             </div>
           )}
 
           {mensajeExito && (
-            <div className="mt-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs text-emerald-400 flex items-center gap-2 font-bold">
+            <div className="mt-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-xs text-[#286F50] flex items-center gap-2 font-bold">
               <Check className="h-4 w-4" /> Presupuestos actualizados con éxito.
             </div>
           )}
@@ -73,18 +73,18 @@ export function BudgetManagerModal(props: Props) {
               return (
                 <div
                   key={item.categoria.id}
-                  className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                  className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] hover:border-[#CBD6CA] transition-colors"
                 >
                   <div>
-                    <p className="text-xs sm:text-sm font-bold text-slate-200">{item.categoria.nombre}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-xs sm:text-sm font-bold text-[#263D33]">{item.categoria.nombre}</p>
+                    <p className="text-[11px] text-[#5E7165] mt-0.5">
                     Gastado este mes:{" "}
-                    <span className="font-semibold text-slate-300">{formatearMonto(item.gastado)}</span>
+                    <span className="font-semibold text-[#475C50]">{formatearMonto(item.gastado)}</span>
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1 bg-slate-800/80 border border-white/10 rounded-xl px-3 py-1.5 focus-within:border-emerald-400/60">
-                  <span className="text-xs text-slate-400 font-semibold">$</span>
+                <div className="flex items-center gap-1 bg-[#E8EEE7] border border-[#DCE4DB] rounded-xl px-3 py-1.5 focus-within:border-emerald-400/60">
+                  <span className="text-xs text-[#5E7165] font-semibold">$</span>
                   <input
                     type="number"
                     step="any"
@@ -92,7 +92,7 @@ export function BudgetManagerModal(props: Props) {
                     placeholder="Sin límite"
                     value={valorInput}
                     onChange={(e) => manejarCambio(item.categoria.id, e.target.value)}
-                    className="w-24 bg-transparent text-sm text-right font-medium text-slate-100 placeholder:text-slate-600 focus:outline-none"
+                    className="w-24 bg-transparent text-sm text-right font-medium text-[#1C3028] placeholder:text-[#96A399] focus:outline-none"
                   />
                 </div>
               </div>
@@ -101,7 +101,7 @@ export function BudgetManagerModal(props: Props) {
         </div>
 
         {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-end gap-3">
+        <div className="mt-6 pt-4 border-t border-[#DCE4DB] flex items-center justify-end gap-3">
           <GlowButton variant="secondary" onClick={onCerrar} disabled={isPending}>
             Cancelar
           </GlowButton>

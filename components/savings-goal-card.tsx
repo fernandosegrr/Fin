@@ -23,18 +23,18 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
     <>
       <SpotlightCard
         spotlightColor="rgba(139, 92, 246, 0.15)"
-        className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/30"
+        className="relative overflow-hidden bg-white border border-[#DCE4DB] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/5"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 border border-violet-500/25 text-violet-400 shrink-0 shadow-sm shadow-violet-500/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 border border-violet-500/25 text-[#795F84] shrink-0 shadow-sm shadow-violet-500/10">
               <Flag className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-violet-300 block">
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#795F84] block">
                 Propósito de Ahorro
               </span>
-              <h3 className="text-sm sm:text-base font-bold text-slate-100 truncate mt-0.5">
+              <h3 className="text-sm sm:text-base font-bold text-[#1C3028] truncate mt-0.5">
                 {meta ? meta.nombre : "Define tu meta"}
               </h3>
             </div>
@@ -44,7 +44,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
               <button
                 type="button"
                 onClick={borrar}
-                className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                className="p-2 rounded-xl text-[#5E7165] hover:text-[#AA524A] hover:bg-rose-500/10 transition-colors"
                 title="Quitar meta"
               >
                 <Trash2 className="h-4 w-4" />
@@ -53,7 +53,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
             <button
               type="button"
               onClick={abrir}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="p-2 rounded-xl text-[#5E7165] hover:text-[#1C3028] hover:bg-[#F4F7F2] transition-colors"
               title={meta ? "Editar meta" : "Crear meta"}
             >
               <Pencil className="h-4 w-4" />
@@ -64,47 +64,47 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
         {meta ? (
           <div className="mt-5">
             <div className="flex items-baseline justify-between">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-slate-100">
+              <span className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-[#1C3028]">
                 {porcentaje}%
               </span>
-              <span className="text-xs font-semibold text-slate-400">
-                Objetivo: <strong className="text-slate-200">{formatearMonto(objetivo)}</strong>
+              <span className="text-xs font-semibold text-[#5E7165]">
+                Objetivo: <strong className="text-[#263D33]">{formatearMonto(objetivo)}</strong>
               </span>
             </div>
 
-            {/* Barra de progreso con resplandor neón */}
+            {/* Avance de la meta */}
             <div
               role="progressbar"
               aria-label="Avance de la meta"
               aria-valuenow={porcentaje}
               aria-valuemin={0}
               aria-valuemax={100}
-              className="mt-3.5 h-3 w-full overflow-hidden rounded-full bg-slate-950/80 border border-white/[0.06] p-0.5"
+              className="mt-3.5 h-3 w-full overflow-hidden rounded-full bg-[#F7F9F5] border border-[#DCE4DB] p-0.5"
             >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-indigo-500 to-emerald-400 transition-all duration-700 shadow-[0_0_10px_rgba(139,92,246,0.5)]"
+                className="h-full rounded-full bg-[#6C8272] transition-all duration-700"
                 style={{ width: `${porcentaje}%` }}
               />
             </div>
 
-            <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
+            <div className="mt-2.5 flex items-center justify-between text-[11px] text-[#5E7165]">
               <span className="font-medium">
                 {meta.fecha_limite ? `Límite: ${meta.fecha_limite}` : "Sin fecha límite"}
               </span>
-              <span className="font-semibold text-slate-200">
+              <span className="font-semibold text-[#263D33]">
                 {restante >= 0.01 ? `Faltan ${formatearMonto(restante)}` : "¡Meta alcanzada! 🎉"}
               </span>
             </div>
           </div>
         ) : (
-          <div className="mt-4 pt-3 border-t border-white/[0.06] text-center">
-            <p className="text-xs text-slate-400 mb-3">
+          <div className="mt-4 pt-3 border-t border-[#DCE4DB] text-center">
+            <p className="text-xs text-[#5E7165] mb-3">
               Vincula un objetivo financiero a tu saldo disponible para medir tu avance.
             </p>
             <button
               type="button"
               onClick={abrir}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-xs font-bold text-violet-300 hover:border-violet-400/40 hover:bg-violet-500/10 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-[#CBD6CA] bg-[#F4F7F2] text-xs font-bold text-[#795F84] hover:border-violet-400/40 hover:bg-violet-500/10 transition-all"
             >
               <Target className="h-4 w-4" /> Establecer meta de ahorro
             </button>
@@ -115,7 +115,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
       {/* Modal de edición de meta */}
       {modalAbierto && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251D]/45 backdrop-blur-md"
           onClick={(e) => {
             if (e.target === e.currentTarget) setModalAbierto(false);
           }}
@@ -123,37 +123,37 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl backdrop-blur-2xl"
+            className="w-full max-w-sm rounded-3xl border border-[#DCE4DB] bg-white p-6 shadow-2xl backdrop-blur-2xl"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                <Flag className="h-4 w-4 text-violet-400" /> Meta de ahorro
+            <div className="flex items-center justify-between pb-3 border-b border-[#DCE4DB]">
+              <h3 className="text-sm font-bold text-[#1C3028] flex items-center gap-2">
+                <Flag className="h-4 w-4 text-[#795F84]" /> Meta de ahorro
               </h3>
               <button
                 type="button"
                 onClick={() => setModalAbierto(false)}
                 aria-label="Cerrar"
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+                className="p-1.5 text-[#5E7165] hover:text-[#1C3028] rounded-lg transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <form onSubmit={guardar} className="mt-4 space-y-3.5">
               <div>
-                <label htmlFor="meta-nombre" className="block text-xs font-medium text-slate-400 mb-1">Nombre</label>
+                <label htmlFor="meta-nombre" className="block text-xs font-medium text-[#5E7165] mb-1">Nombre</label>
                 <input
                   id="meta-nombre"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Fondo de emergencia, Viaje..."
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-400/60 focus:outline-none"
+                  className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] px-4 py-2.5 text-sm text-[#1C3028] placeholder:text-[#96A399] focus:border-violet-400/60 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label htmlFor="meta-monto" className="block text-xs font-medium text-slate-400 mb-1">Monto objetivo</label>
-                <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-violet-400/60">
-                  <span className="text-lg font-bold text-slate-400 mr-2">$</span>
+                <label htmlFor="meta-monto" className="block text-xs font-medium text-[#5E7165] mb-1">Monto objetivo</label>
+                <div className="relative flex items-center rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] px-4 py-2.5 focus-within:border-violet-400/60">
+                  <span className="text-lg font-bold text-[#5E7165] mr-2">$</span>
                   <input
                     id="meta-monto"
                     type="text"
@@ -161,13 +161,13 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
                     value={montoTexto}
                     onChange={(e) => setMontoTexto(e.target.value)}
                     placeholder="25000"
-                    className="w-full bg-transparent text-xl font-bold text-slate-100 placeholder:text-slate-700 focus:outline-none tabular-nums"
+                    className="w-full bg-transparent text-xl font-bold text-[#1C3028] placeholder:text-[#9CA99F] focus:outline-none tabular-nums"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="meta-fecha" className="block text-xs font-medium text-slate-400 mb-1">
+                <label htmlFor="meta-fecha" className="block text-xs font-medium text-[#5E7165] mb-1">
                   Fecha límite (opcional)
                 </label>
                 <input
@@ -175,12 +175,12 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 focus:border-violet-400/60 focus:outline-none"
+                  className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] px-4 py-2.5 text-sm text-[#1C3028] focus:border-violet-400/60 focus:outline-none"
                 />
               </div>
 
               {error && (
-                <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+                <p className="rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-[#AA524A]">
                   {error}
                 </p>
               )}

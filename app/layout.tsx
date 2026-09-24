@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "NexFin Pro",
   },
 };
@@ -33,18 +33,18 @@ export const viewport: Viewport = {
   // rompe WCAG 1.4.4 (Resize Text) y afecta a quien necesita agrandar texto.
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#070a12",
+  themeColor: "#f4f6f0",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es" className={`dark ${outfit.variable}`}>
+    <html lang="es" className={outfit.variable}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className="bg-[#070a12] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white font-sans">
+      <body className="bg-[#f4f6f0] text-[#1c3028] antialiased selection:bg-[#b9d8c0] font-sans">
         <RegisterServiceWorker />
         <div className="min-h-dvh w-full">{children}</div>
       </body>

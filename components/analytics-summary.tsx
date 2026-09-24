@@ -41,53 +41,53 @@ export function AnalyticsSummary({
   return (
     <section className="mt-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-          <Activity className="h-3.5 w-3.5 text-emerald-400" />
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#5E7165] flex items-center gap-1.5">
+          <Activity className="h-3.5 w-3.5 text-[#286F50]" />
           Métricas Financieras
         </h3>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
         {/* Promedio Diario */}
-        <SpotlightCard className="p-3 sm:p-4 bg-slate-900/60 border-white/10 rounded-2xl">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold">
-            <Calendar className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+        <SpotlightCard className="p-3 sm:p-4 bg-white border-[#DCE4DB] rounded-2xl">
+          <div className="flex items-center gap-1.5 text-[#5E7165] text-[11px] font-semibold">
+            <Calendar className="h-3.5 w-3.5 text-[#317D7D] shrink-0" />
             <span className="truncate">Promedio Diario</span>
           </div>
-          <p className="mt-1.5 text-base sm:text-lg font-bold text-slate-100 tabular-nums">
+          <p className="mt-1.5 text-base sm:text-lg font-bold text-[#1C3028] tabular-nums">
             {formatearMonto(promedioDiario)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-400 truncate">por día del mes</p>
+          <p className="mt-0.5 text-xs text-[#5E7165] truncate">por día del mes</p>
         </SpotlightCard>
 
         {/* Categoria Top */}
-        <SpotlightCard className="p-3 sm:p-4 bg-slate-900/60 border-white/10 rounded-2xl">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold">
-            <Receipt className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+        <SpotlightCard className="p-3 sm:p-4 bg-white border-[#DCE4DB] rounded-2xl">
+          <div className="flex items-center gap-1.5 text-[#5E7165] text-[11px] font-semibold">
+            <Receipt className="h-3.5 w-3.5 text-[#62688B] shrink-0" />
             <span className="truncate">Mayor Gasto</span>
           </div>
-          <p className="mt-1.5 text-xs sm:text-sm font-bold text-slate-100 truncate" title={topCategoria.nombre}>
+          <p className="mt-1.5 text-xs sm:text-sm font-bold text-[#1C3028] truncate" title={topCategoria.nombre}>
             {topCategoria.nombre}
           </p>
-          <p className="mt-0.5 text-xs text-indigo-300 font-bold tabular-nums">
+          <p className="mt-0.5 text-xs text-[#62688B] font-bold tabular-nums">
             {formatearMonto(topCategoria.monto)}
           </p>
         </SpotlightCard>
 
         {/* Fijo vs Variable */}
-        <SpotlightCard className="p-3 sm:p-4 bg-slate-900/60 border-white/10 rounded-2xl col-span-2">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-1.5">
+        <SpotlightCard className="p-3 sm:p-4 bg-white border-[#DCE4DB] rounded-2xl col-span-2">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-[#5E7165] mb-1.5">
             <span className="flex items-center gap-1.5">
-              <PieChart className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <PieChart className="h-3.5 w-3.5 text-[#A66E31] shrink-0" />
               Gastos Fijos vs Variables
             </span>
-            <span className="text-xs font-bold text-slate-200">
+            <span className="text-xs font-bold text-[#263D33]">
               {porcentajeFijo}% Fijo / {porcentajeVariable}% Var.
             </span>
           </div>
 
           {/* Progress bar dual */}
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden flex mt-2">
+          <div className="h-2 w-full bg-[#E8EEE7] rounded-full overflow-hidden flex mt-2">
             <div
               className="h-full bg-indigo-500 transition-all duration-500"
               style={{ width: `${porcentajeFijo}%` }}
@@ -100,7 +100,7 @@ export function AnalyticsSummary({
             />
           </div>
 
-          <div className="mt-2 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-2 flex items-center justify-between text-xs text-[#5E7165]">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-indigo-500 shrink-0" /> Fijo: {formatearMonto(egresosFijos)}
             </span>
@@ -112,16 +112,16 @@ export function AnalyticsSummary({
       </div>
 
       {ingresosPorCliente.length > 0 && (
-        <SpotlightCard className="mt-2.5 p-3 sm:p-4 bg-slate-900/60 border-white/10 rounded-2xl">
-          <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold mb-2">
-            <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+        <SpotlightCard className="mt-2.5 p-3 sm:p-4 bg-white border-[#DCE4DB] rounded-2xl">
+          <div className="flex items-center gap-1.5 text-[#5E7165] text-[11px] font-semibold mb-2">
+            <Users className="h-3.5 w-3.5 text-[#286F50] shrink-0" />
             Ingresos por cliente / proyecto
           </div>
           <div className="space-y-1.5">
             {ingresosPorCliente.slice(0, 8).map((c) => (
               <div key={c.cliente_id ?? "sin"} className="flex items-center justify-between text-xs">
-                <span className="truncate text-slate-300">{c.nombre}</span>
-                <span className="font-semibold tabular-nums text-emerald-400 shrink-0 pl-2">{formatearMonto(c.monto)}</span>
+                <span className="truncate text-[#475C50]">{c.nombre}</span>
+                <span className="font-semibold tabular-nums text-[#286F50] shrink-0 pl-2">{formatearMonto(c.monto)}</span>
               </div>
             ))}
           </div>

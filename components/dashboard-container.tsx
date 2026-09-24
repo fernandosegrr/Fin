@@ -83,7 +83,7 @@ export function DashboardContainer({
 
       {/* Top Navbar responsiva */}
       <header
-        className="dashboard-header sticky top-0 z-30 flex items-center justify-between pb-4 bg-[#070a12]/95 backdrop-blur-xl border-b border-white/10"
+        className="dashboard-header sticky top-0 z-30 flex items-center justify-between pb-4 bg-[#F4F6F0]/95 backdrop-blur-xl border-b border-[#DCE4DB]"
         style={{
           paddingTop: "max(0.75rem, calc(0.5rem + env(safe-area-inset-top, 0px)))",
         }}
@@ -91,12 +91,12 @@ export function DashboardContainer({
         <div className="flex items-center gap-3">
           <BrandLogo variant="compact" withLink className="lg:hidden" />
           <div>
-            <h1 className="hidden lg:flex items-center gap-2 text-sm font-bold text-slate-200 leading-none">
+            <h1 className="hidden lg:flex items-center gap-2 text-sm font-bold text-[#263D33] leading-none">
               <span>Mi espacio financiero</span>
             </h1>
             <p
               className={`text-[10px] mt-0.5 lg:mt-1 flex items-center gap-1.5 font-semibold ${
-                estadoConexion === "vivo" ? "text-emerald-400" : "text-slate-500"
+                estadoConexion === "vivo" ? "text-[#286F50]" : "text-[#7A897D]"
               }`}
             >
               <span className="relative flex h-2 w-2">
@@ -130,7 +130,7 @@ export function DashboardContainer({
             aria-label="Buscar en todo el historial"
             onClick={() => setHistorialAbierto(true)}
           >
-            <Search className="h-4 w-4 text-slate-400 hover:text-emerald-400" />
+            <Search className="h-4 w-4 text-[#5E7165] hover:text-[#286F50]" />
           </GlowButton>
           <ExportButton
             anio={balance.actual.anio}
@@ -139,7 +139,7 @@ export function DashboardContainer({
           />
           <form action={signOut}>
             <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión" aria-label="Cerrar sesión">
-              <LogOut className="h-4 w-4 text-slate-400 hover:text-rose-400" />
+              <LogOut className="h-4 w-4 text-[#5E7165] hover:text-[#AA524A]" />
             </GlowButton>
           </form>
         </div>
@@ -147,7 +147,7 @@ export function DashboardContainer({
 
       {/* Selector de Mes */}
       <div className="page-heading">
-        <div><p className="eyebrow">TU DINERO, CON CLARIDAD</p><h2>{section.label}</h2><p className="text-sm text-slate-400 mt-2">{section.description}</p></div>
+        <div><p className="eyebrow">TU DINERO, CON CLARIDAD</p><h2>{section.label}</h2><p className="text-sm text-[#5E7165] mt-2">{section.description}</p></div>
         <div className="w-full sm:w-auto sm:min-w-72"><MonthSelector anio={anio} mes={mes} onCambiarMes={cambiarMes} /></div>
       </div>
 

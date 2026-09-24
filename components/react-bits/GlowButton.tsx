@@ -1,11 +1,18 @@
 "use client";
 
-import React from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-interface GlowButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  children: React.ReactNode;
+interface GlowButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "ghost";
 }
+
+const variants = {
+  primary: "border-[#245C42] bg-[#245C42] text-white hover:bg-[#1D4C37]",
+  secondary: "border-[#CBD8CC] bg-white text-[#254638] hover:bg-[#F1F6F0]",
+  danger: "border-[#E4C7C1] bg-[#FCF0ED] text-[#A34D46] hover:bg-[#F7E4DF]",
+  ghost: "border-transparent bg-transparent text-[#526A59] hover:bg-[#E9F0E7] hover:text-[#1C3028]",
+} as const;
 
 export function GlowButton({
   children,
@@ -13,27 +20,12 @@ export function GlowButton({
   className = "",
   ...props
 }: GlowButtonProps) {
-  const baseStyles =
-    "relative inline-flex min-h-10 items-center justify-center font-bold rounded-xl px-4 py-2 text-xs sm:text-sm transition-all duration-200 overflow-hidden cursor-pointer select-none active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none";
-
-  let variantStyles = "";
-  if (variant === "primary") {
-    variantStyles =
-      "bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 border border-emerald-200/40 shadow-sm shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:brightness-105";
-  } else if (variant === "secondary") {
-    variantStyles =
-      "bg-slate-900/80 text-slate-200 border border-white/[0.08] hover:border-white/[0.18] hover:bg-slate-800/80 hover:text-white shadow-sm";
-  } else if (variant === "danger") {
-    variantStyles =
-      "bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-600 hover:text-white shadow-sm";
-  } else if (variant === "ghost") {
-    variantStyles =
-      "bg-transparent text-slate-400 hover:text-white hover:bg-white/[0.06]";
-  }
-
   return (
-    <button className={`${baseStyles} ${variantStyles} ${className}`} {...props}>
-      <span className="relative z-10 flex items-center justify-center gap-2">{children}</span>
+    <button
+      className={`inline-flex min-h-10 items-center justify-center rounded-xl border px-4 py-2 text-xs font-semibold transition-colors sm:text-sm disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+      {...props}
+    >
+      <span className="flex items-center justify-center gap-2">{children}</span>
     </button>
   );
 }

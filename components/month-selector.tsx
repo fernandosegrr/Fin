@@ -37,22 +37,22 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
   const nombreMesCapitalizado = capitalizarPrimeraLetra(nombreDelMes(anio, mes));
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-slate-900/85 p-1.5 backdrop-blur-2xl shadow-lg shadow-black/40">
+    <div className="flex items-center justify-between rounded-2xl border border-[#DCE4DB] bg-white/85 p-1.5 backdrop-blur-2xl shadow-lg shadow-black/5">
       <button
         type="button"
         disabled={anio <= 2000 && mes === 1}
         onClick={irAnterior}
         aria-label="Mes anterior"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-slate-300 transition-all hover:border-white/20 hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:opacity-30 disabled:pointer-events-none shrink-0"
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#DCE4DB] bg-[#F4F7F2] text-[#475C50] transition-all hover:border-[#CBD6CA] hover:bg-white/[0.08] hover:text-[#1C3028] active:scale-95 disabled:opacity-30 disabled:pointer-events-none shrink-0"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
 
       <div className="flex items-center gap-2 px-3 py-1">
-        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400">
+        <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-[#286F50]">
           <Calendar className="h-3.5 w-3.5" />
         </div>
-        <span className="text-xs sm:text-sm font-bold tracking-wide text-slate-100 truncate">
+        <span className="text-xs sm:text-sm font-bold tracking-wide text-[#1C3028] truncate">
           {nombreMesCapitalizado}
         </span>
 
@@ -60,7 +60,7 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
           <button
             type="button"
             onClick={irMesActual}
-            className="ml-1 inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/20 hover:text-white transition-all shadow-sm"
+            className="ml-1 inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold text-[#286F50] hover:bg-emerald-500/20 hover:text-[#1C3028] transition-all shadow-sm"
             title="Volver al mes actual"
           >
             <RotateCcw className="h-2.5 w-2.5" /> Hoy
@@ -73,7 +73,7 @@ export function MonthSelector({ anio, mes, onCambiarMes }: MonthSelectorProps) {
         disabled={anio >= 2100 && mes === 12}
         onClick={irSiguiente}
         aria-label="Mes siguiente"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-slate-300 transition-all hover:border-white/20 hover:bg-white/[0.08] hover:text-white active:scale-95 disabled:opacity-30 disabled:pointer-events-none shrink-0"
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#DCE4DB] bg-[#F4F7F2] text-[#475C50] transition-all hover:border-[#CBD6CA] hover:bg-white/[0.08] hover:text-[#1C3028] active:scale-95 disabled:opacity-30 disabled:pointer-events-none shrink-0"
       >
         <ChevronRight className="h-4 w-4" />
       </button>

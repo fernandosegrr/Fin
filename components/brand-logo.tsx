@@ -11,11 +11,11 @@ interface BrandLogoProps {
 export function BrandLogo({
   variant = "compact",
   className = "",
-  withGlow = true,
+  withGlow = false,
   withLink = false,
 }: BrandLogoProps) {
   const content = (
-    <div className={`relative inline-flex items-center gap-3 select-none ${className}`}>
+    <div className={`relative inline-flex items-center gap-3 rounded-2xl border border-[#2d4538] bg-[#14251d] px-2.5 py-1.5 select-none ${className}`}>
       {/* Resplandor neón ambiental inspirado en la gama esmeralda y púrpura del logo */}
       {withGlow && (
         <div

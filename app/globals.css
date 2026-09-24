@@ -4,18 +4,19 @@
 
 @layer base {
   html {
-    background-color: #06080f;
-    color-scheme: dark;
+    background-color: #f4f6f0;
+    color-scheme: light;
   }
 
   body {
-    @apply bg-[#06080f] text-slate-100 antialiased selection:bg-emerald-500 selection:text-white;
+    @apply bg-[#f4f6f0] text-[#1c3028] antialiased selection:bg-[#b9d8c0] selection:text-[#1c3028];
     font-family: var(--font-outfit), system-ui, -apple-system, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-image: radial-gradient(circle at 5% 0%, rgba(204, 223, 206, 0.4), transparent 28%);
   }
 }
 
-/* Scrollbar ultrafino y elegante */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -24,16 +25,16 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(55, 84, 67, 0.2);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(55, 84, 67, 0.4);
 }
 
 /* Date input custom styling */
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) opacity(0.5);
+  opacity: 0.55;
   cursor: pointer;
 }
 
@@ -48,41 +49,37 @@ input[type="number"] {
 }
 
 :root {
-  --bg-cosmic: #06080f;
-  --surface: #0c111d;
-  --surface-elevated: #111827;
-  --surface-glass: rgba(15, 23, 42, 0.65);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-highlight: rgba(16, 185, 129, 0.25);
+  --bg-cosmic: #f4f6f0;
+  --surface: #ffffff;
+  --surface-elevated: #f8faf7;
+  --surface-glass: rgba(255, 255, 255, 0.92);
+  --line: #dce4db;
+  --line-highlight: #a9c8b2;
 }
 
-/* Ambient glow & glass panels */
+/* Shared surfaces */
 .ambient-cosmic {
-  background-image: 
-    radial-gradient(ellipse 60% 40% at 20% -10%, rgba(16, 185, 129, 0.08), transparent 60%),
-    radial-gradient(ellipse 50% 35% at 85% 10%, rgba(139, 92, 246, 0.07), transparent 50%);
+  background: #f4f6f0;
 }
 
 .glass-card {
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.7) 0%, rgba(11, 15, 26, 0.8) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #fff;
+  border: 1px solid var(--line);
 }
 
 .glass-card-hover {
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
 }
 .glass-card-hover:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+  border-color: #b6cbb9;
+  box-shadow: 0 12px 30px -20px rgba(31, 67, 43, 0.2);
 }
 
 .finance-card {
-  border-radius: 24px;
+  border-radius: 20px;
   border: 1px solid var(--line);
-  background: linear-gradient(145deg, rgba(16, 23, 38, 0.75), rgba(9, 13, 22, 0.85));
-  backdrop-filter: blur(20px);
+  background: var(--surface);
+  box-shadow: 0 8px 30px -22px rgba(31, 67, 43, 0.24);
 }
 
 .dashboard-shell {
@@ -100,11 +97,11 @@ input[type="number"] {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 24px 0 16px;
+  padding: 30px 0 20px;
 }
 
 .page-heading h2 {
-  font-size: clamp(26px, 2.5vw, 34px);
+  font-size: clamp(28px, 2.5vw, 38px);
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -112,7 +109,7 @@ input[type="number"] {
 }
 
 .eyebrow {
-  color: #34d399;
+  color: #286f50;
   font-size: 10px;
   letter-spacing: 0.18em;
   font-weight: 700;
@@ -122,13 +119,13 @@ input[type="number"] {
 .metric-card {
   padding: 20px;
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.75), rgba(11, 17, 28, 0.85));
-  backdrop-filter: blur(12px);
-  transition: all 0.2s ease;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 30px -22px rgba(31, 67, 43, 0.2);
+  transition: border-color 0.2s ease, transform 0.2s ease;
 }
 .metric-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: #b6cbb9;
 }
 
 .overview-grid {
@@ -146,7 +143,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #10b981;
+  outline: 2px solid #286f50;
   outline-offset: 3px;
 }
 button:disabled {
@@ -160,8 +157,8 @@ button:disabled {
   left: 20px;
   z-index: 100;
   padding: 10px 18px;
-  background: #10b981;
-  color: #04130d;
+  background: #286f50;
+  color: #fff;
   font-weight: 600;
   border-radius: 12px;
   transition: top 0.2s;
@@ -216,8 +213,7 @@ body [role="dialog"] {
     margin-left: -270px;
     padding: 28px 16px;
     border-right: 1px solid var(--line);
-    background: linear-gradient(180deg, #090e18 0%, #060910 100%);
-    backdrop-filter: blur(24px);
+    background: #fff;
     z-index: 40;
   }
   .dashboard-header {

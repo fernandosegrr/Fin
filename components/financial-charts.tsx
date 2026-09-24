@@ -25,14 +25,14 @@ interface Props {
 }
 
 const PALETTE = [
-  "#10b981", // emerald
-  "#8b5cf6", // violet
-  "#06b6d4", // cyan
-  "#f43f5e", // rose
-  "#f59e0b", // amber
-  "#6366f1", // indigo
-  "#ec4899", // pink
-  "#14b8a6", // teal
+  "#2B7353",
+  "#B8864B",
+  "#4B8B8A",
+  "#B8675D",
+  "#758F66",
+  "#746F98",
+  "#A77A87",
+  "#789A8D",
 ];
 
 export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosTotales }: Props) {
@@ -42,39 +42,39 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
 
   // Datos para comparativa Flujo de Efectivo
   const barData = [
-    { name: "Ingresos", monto: ingresosTotales, fill: "#10b981" },
-    { name: "Egresos", monto: egresosTotales, fill: "#f43f5e" },
+    { name: "Ingresos", monto: ingresosTotales, fill: "#2B7353" },
+    { name: "Egresos", monto: egresosTotales, fill: "#B8675D" },
   ];
 
   return (
     <section className="mt-4">
       <SpotlightCard
-        spotlightColor="rgba(6, 182, 212, 0.12)"
-        className="bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/30"
+        spotlightColor="#C8DCCB"
+        className="bg-white border border-[#DCE4DB] p-5 sm:p-7 rounded-3xl shadow-xl shadow-black/5"
       >
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-400 shadow-sm shadow-cyan-500/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/25 text-[#317D7D] shadow-sm shadow-cyan-500/10">
               {activeTab === "pie" ? <PieIcon className="h-5 w-5" /> : <BarChart3 className="h-5 w-5" />}
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black text-slate-100">
-                {activeTab === "pie" ? "¿En qué se fue tu dinero?" : "Flujo Comparativo del Mes"}
+              <h3 className="text-base sm:text-lg font-black text-[#1C3028]">
+                {activeTab === "pie" ? "Gastos por categoría" : "Ingresos y gastos"}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">Métricas del periodo visualizado</p>
+              <p className="text-xs text-[#5E7165] mt-0.5">Métricas del periodo visualizado</p>
             </div>
           </div>
 
           {/* Switch de pestaña segmentado */}
-          <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs">
+          <div className="flex rounded-xl bg-[#F7F9F5] p-1 border border-[#DCE4DB] text-xs">
             <button
               type="button"
               onClick={() => setActiveTab("pie")}
               aria-pressed={activeTab === "pie"}
               className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
                 activeTab === "pie"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-emerald-500/20 text-[#286F50] border border-emerald-500/30 shadow-sm"
+                  : "text-[#5E7165] hover:text-[#1C3028]"
               }`}
             >
               Categorías
@@ -85,8 +85,8 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
               aria-pressed={activeTab === "bar"}
               className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
                 activeTab === "bar"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-emerald-500/20 text-[#286F50] border border-emerald-500/30 shadow-sm"
+                  : "text-[#5E7165] hover:text-[#1C3028]"
               }`}
             >
               Flujo de Efectivo
@@ -96,7 +96,7 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
 
         {activeTab === "pie" ? (
           pieData.length === 0 ? (
-            <div className="flex h-48 items-center justify-center text-xs text-slate-400">
+            <div className="flex h-48 items-center justify-center text-xs text-[#5E7165]">
               No hay egresos registrados en este periodo.
             </div>
           ) : (
@@ -125,10 +125,10 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
                         "Monto",
                       ]}
                       contentStyle={{
-                        backgroundColor: "#0f172a",
-                        borderColor: "rgba(255,255,255,0.1)",
+                        backgroundColor: "#ffffff",
+                        borderColor: "#dce4db",
                         borderRadius: "12px",
-                        color: "#fff",
+                        color: "#1c3028",
                         fontSize: "12px",
                       }}
                     />
@@ -143,18 +143,18 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
                   return (
                     <div
                       key={entry.id}
-                      className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-950/40 border border-white/5"
+                      className="flex items-center justify-between text-xs p-2 rounded-xl bg-[#F7F9F5] border border-[#DCE4DB]"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <span
                           className="h-2.5 w-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: PALETTE[index % PALETTE.length] }}
                         />
-                        <span className="truncate text-slate-300 font-medium">{entry.name}</span>
+                        <span className="truncate text-[#475C50] font-medium">{entry.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-slate-400">{pct}%</span>
-                        <span className="font-semibold text-slate-200 tabular-nums">
+                        <span className="text-[#5E7165]">{pct}%</span>
+                        <span className="font-semibold text-[#263D33] tabular-nums">
                           {formatearMonto(entry.value)}
                         </span>
                       </div>
@@ -167,9 +167,9 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
         ) : (
           <div className="h-56 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
+              <BarChart data={barData} margin={{ top: 10, right: 10, left: 8, bottom: 0 }}>
+                <XAxis dataKey="name" stroke="#6b7d70" fontSize={12} tickLine={false} />
+                <YAxis stroke="#6b7d70" fontSize={12} tickLine={false} width={42} tickFormatter={(value: number) => value >= 1000 ? `${Math.round(value / 1000)}k` : String(value)} />
                 <Tooltip
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   formatter={(val: any) => [
@@ -177,10 +177,10 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
                     "Monto",
                   ]}
                   contentStyle={{
-                    backgroundColor: "#0f172a",
-                    borderColor: "rgba(255,255,255,0.1)",
+                    backgroundColor: "#ffffff",
+                    borderColor: "#dce4db",
                     borderRadius: "12px",
-                    color: "#fff",
+                    color: "#1c3028",
                     fontSize: "12px",
                   }}
                 />

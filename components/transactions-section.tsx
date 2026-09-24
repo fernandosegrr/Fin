@@ -37,15 +37,15 @@ export function TransactionsSection({
       <section className="mt-4 px-0 sm:px-4 pb-20">
         <SpotlightCard
           spotlightColor="rgba(16, 244, 177, 0.12)"
-          className="bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 border border-white/[0.08] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/30"
+          className="bg-white border border-[#DCE4DB] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/5"
         >
           {/* Controls Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
             <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-100 tracking-tight">
+              <h2 className="text-base sm:text-lg font-black text-[#1C3028] tracking-tight">
                 Movimientos del Mes
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#5E7165]">
                 Mostrando {transaccionesFiltradas.length} de {transacciones.length} transacciones registradas
               </p>
             </div>
@@ -73,27 +73,27 @@ export function TransactionsSection({
           {/* Bar de búsqueda y Filtros */}
           <div className="space-y-3 mb-5">
             <div className="relative">
-              <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3.5 top-3 h-4 w-4 text-[#5E7165]" />
               <input
                 type="text"
                 aria-label="Buscar movimientos del mes"
                 placeholder="Buscar por concepto, categoría o cliente..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full rounded-2xl border border-white/[0.08] bg-slate-950/80 pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/50 focus:outline-none transition-colors"
+                className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] pl-10 pr-4 py-2.5 text-xs text-[#1C3028] placeholder:text-[#7A897D] focus:border-emerald-400/50 focus:outline-none transition-colors"
               />
             </div>
 
             {/* Chips de filtro */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs">
+              <div className="flex rounded-xl bg-[#F7F9F5] p-1 border border-[#DCE4DB] text-xs">
                 <button
                   type="button"
                   onClick={() => setFiltroTipo("todos")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "todos"
-                      ? "bg-slate-800 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-[#E8EEE7] text-[#1C3028] shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   Todos
@@ -103,8 +103,8 @@ export function TransactionsSection({
                   onClick={() => setFiltroTipo("egreso")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "egreso"
-                      ? "bg-rose-500/20 text-rose-300 border border-rose-500/30 shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-rose-500/20 text-[#AA524A] border border-rose-500/30 shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   Egresos
@@ -114,8 +114,8 @@ export function TransactionsSection({
                   onClick={() => setFiltroTipo("ingreso")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "ingreso"
-                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-emerald-500/20 text-[#286F50] border border-emerald-500/30 shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   Ingresos
@@ -123,14 +123,14 @@ export function TransactionsSection({
               </div>
 
               {/* Filtro por Método de Pago */}
-              <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/[0.06] text-xs">
+              <div className="flex rounded-xl bg-[#F7F9F5] p-1 border border-[#DCE4DB] text-xs">
                 <button
                   type="button"
                   onClick={() => setFiltroMetodo("todos")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroMetodo === "todos"
-                      ? "bg-slate-800 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-[#E8EEE7] text-[#1C3028] shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   Todas las cuentas
@@ -140,8 +140,8 @@ export function TransactionsSection({
                   onClick={() => setFiltroMetodo("tarjeta")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroMetodo === "tarjeta"
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-cyan-500/20 text-[#317D7D] border border-cyan-500/30 shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   💳 Tarjeta
@@ -151,8 +151,8 @@ export function TransactionsSection({
                   onClick={() => setFiltroMetodo("efectivo")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroMetodo === "efectivo"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-amber-500/20 text-[#A66E31] border border-amber-500/30 shadow-sm"
+                      : "text-[#5E7165] hover:text-[#1C3028]"
                   }`}
                 >
                   💵 Efectivo
@@ -162,13 +162,13 @@ export function TransactionsSection({
           </div>
 
           {errorEnvio && (
-            <p className="mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 text-xs text-rose-400">
+            <p className="mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 text-xs text-[#AA524A]">
               {errorEnvio}
             </p>
           )}
 
           {totalTransacciones > transacciones.length && (
-            <p className="mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3.5 py-2.5 text-xs text-amber-400">
+            <p className="mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3.5 py-2.5 text-xs text-[#A66E31]">
               Mostrando los {transacciones.length} movimientos más recientes de {totalTransacciones} este mes. Usa
               &quot;Exportar Excel&quot; para descargar el mes completo.
             </p>
@@ -176,7 +176,7 @@ export function TransactionsSection({
 
           {/* Lista de transacciones */}
           {transaccionesFiltradas.length === 0 ? (
-            <div className="py-14 text-center text-xs text-slate-500">
+            <div className="py-14 text-center text-xs text-[#7A897D]">
               {transacciones.length === 0
                 ? "Todavía no hay movimientos registrados en este mes."
                 : "No se encontraron movimientos con los filtros aplicados."}
@@ -195,7 +195,7 @@ export function TransactionsSection({
                     onClick={() => {
                       abrirEdicion(t);
                     }}
-                    className={`group flex w-full items-center justify-between p-3.5 text-left rounded-2xl bg-slate-950/50 border border-white/[0.05] hover:border-white/[0.15] hover:bg-slate-900/60 transition-all ${
+                    className={`group flex w-full items-center justify-between p-3.5 text-left rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] hover:border-[#CBD6CA] hover:bg-white transition-all ${
                       t.pendiente ? "opacity-50 cursor-wait" : "cursor-pointer"
                     }`}
                   >
@@ -203,8 +203,8 @@ export function TransactionsSection({
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
                           esIngreso
-                            ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
-                            : "bg-rose-500/10 border-rose-500/25 text-rose-400"
+                            ? "bg-emerald-500/10 border-emerald-500/25 text-[#286F50]"
+                            : "bg-rose-500/10 border-rose-500/25 text-[#AA524A]"
                         }`}
                       >
                         {esIngreso ? (
@@ -216,23 +216,23 @@ export function TransactionsSection({
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="truncate text-xs sm:text-sm font-bold text-slate-200">
+                          <p className="truncate text-xs sm:text-sm font-bold text-[#263D33]">
                             {t.categoria?.nombre ?? "Sin categoría"}
                             {t.cliente?.nombre ? (
-                              <span className="ml-1 font-medium text-slate-400">· {t.cliente.nombre}</span>
+                              <span className="ml-1 font-medium text-[#5E7165]">· {t.cliente.nombre}</span>
                             ) : null}
                           </p>
                           <span
                             className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                               esEfectivo
-                                ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                                : "bg-cyan-500/10 text-cyan-300 border-cyan-500/20"
+                                ? "bg-amber-500/10 text-[#A66E31] border-amber-500/20"
+                                : "bg-cyan-500/10 text-[#317D7D] border-cyan-500/20"
                             }`}
                           >
                             {esEfectivo ? "Efectivo" : "Tarjeta"}
                           </span>
                         </div>
-                        <p className="truncate text-[11px] text-slate-400 mt-0.5">
+                        <p className="truncate text-[11px] text-[#5E7165] mt-0.5">
                           {formatearFechaCorta(t.fecha)}
                           {t.descripcion ? ` · ${t.descripcion}` : ""}
                         </p>
@@ -242,7 +242,7 @@ export function TransactionsSection({
                     <div className="flex items-center gap-3 shrink-0 pl-3">
                       <span
                         className={`text-sm sm:text-base font-black tabular-nums ${
-                          esIngreso ? "text-emerald-400" : "text-slate-100"
+                          esIngreso ? "text-[#286F50]" : "text-[#1C3028]"
                         }`}
                       >
                         {esIngreso ? "+" : "−"}
@@ -257,18 +257,18 @@ export function TransactionsSection({
         </SpotlightCard>
       </section>
 
-      {/* Floating Action Button (FAB) neón */}
+      {/* Acceso rápido en móvil */}
       <button
         type="button"
         onClick={abrirNuevo}
         aria-label="Agregar movimiento"
-        className="lg:hidden fixed z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-400 to-cyan-400 text-slate-950 font-black shadow-[0_0_24px_rgba(16,244,177,0.5)] hover:scale-105 active:scale-95 transition-all border border-emerald-200/50"
+        className="lg:hidden fixed z-40 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#1D4C37] bg-[#245C42] text-white shadow-lg shadow-[#245C42]/20 transition-colors hover:bg-[#1D4C37]"
         style={{
           bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
           right: "max(1.25rem, calc((100vw - 640px) / 2 + 1.25rem))",
         }}
       >
-        <Plus className="h-7 w-7 text-slate-950" />
+        <Plus className="h-6 w-6" />
       </button>
 
       {/* Modales */}

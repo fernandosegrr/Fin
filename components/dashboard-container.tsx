@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, useCallback } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { BrandLogo } from "./brand-logo";
 import { DashboardNavigation, sections } from "./dashboard-navigation";
 import { MonthInsights } from "./month-insights";
 import { LogOut, Search } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { BalanceResumen } from "@/components/balance-resumen";
 import { AnalyticsSummary } from "@/components/analytics-summary";
 import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
@@ -14,33 +13,19 @@ import { TransactionsSection } from "@/components/transactions-section";
 import { RecurringExpenses } from "@/components/recurring-expenses";
 import { MonthSelector } from "@/components/month-selector";
 import { ExportButton } from "@/components/export-button";
-import { ToastNotification, type ToastMessage } from "@/components/toast-notification";
+import { ToastNotification } from "@/components/toast-notification";
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import {
-  obtenerBalanceMensual,
-  obtenerPresupuestosConGasto,
-  obtenerDatosDashboard,
-  crearTransaccion,
-  signOut,
-  type BalanceMensual,
-} from "@/app/dashboard/actions";
+import { crearTransaccion, signOut } from "@/app/dashboard/actions";
 import { primerDiaDelMes } from "@/lib/dates";
-import type { Categoria, Cliente, GastoRecurrente, MetaAhorro, MetodoPago, PresupuestoConGasto } from "@/lib/types";
+import type { MetodoPago } from "@/lib/types";
+import { useDashboardData, type DashboardInitialData } from "./dashboard/use-dashboard-data";
+import { useDashboardRealtime } from "./dashboard/use-dashboard-realtime";
 import { SavingsGoalCard } from "@/components/savings-goal-card";
 import { HistorialModal } from "@/components/historial-modal";
 
 const FinancialCharts = dynamic(() => import("./financial-charts").then(m => m.FinancialCharts), { loading: () => <p role="status" className="p-6 text-slate-400">Cargando gráficas…</p> });
 const AsesorChat = dynamic(() => import("./asesor-chat").then(m => m.AsesorChat), { loading: () => <p role="status" className="p-6 text-slate-400">Abriendo asesor…</p> });
-
-interface Props {
-  initialBalance: BalanceMensual;
-  initialPresupuestos: PresupuestoConGasto[];
-  initialGastosRecurrentes: GastoRecurrente[];
-  categorias: Categoria[];
-  initialClientes: Cliente[];
-  initialMeta: MetaAhorro | null;
-}
 
 export function DashboardContainer({
   initialBalance,
@@ -49,254 +34,24 @@ export function DashboardContainer({
   categorias: initialCategorias,
   initialClientes,
   initialMeta,
-}: Props) {
-  const [categorias, setCategorias] = useState(initialCategorias);
+}: DashboardInitialData) {
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [asesorVisitado, setAsesorVisitado] = useState(false);
-  const [balance, setBalance] = useState<BalanceMensual>(initialBalance);
-  const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>(initialPresupuestos);
-  const [gastosRecurrentes, setGastosRecurrentes] = useState<GastoRecurrente[]>(initialGastosRecurrentes);
-  const [clientes, setClientes] = useState<Cliente[]>(initialClientes);
-  const [meta, setMeta] = useState<MetaAhorro | null>(initialMeta);
   const [historialAbierto, setHistorialAbierto] = useState(false);
-  const [anio, setAnio] = useState(initialBalance.actual.anio);
-  const [mes, setMes] = useState(initialBalance.actual.mes);
-  const [isPending, startTransition] = useTransition();
-  const [estadoConexion, setEstadoConexion] = useState<"conectando" | "vivo" | "caido">("conectando");
+  const {
+    categorias, balance, presupuestos, gastosRecurrentes, clientes, meta,
+    anio, mes, isPending, toast, cerrarToast, mostrarToast,
+    recargarDatos, cambiarMes,
+  } = useDashboardData({
+    initialBalance,
+    initialPresupuestos,
+    initialGastosRecurrentes,
+    categorias: initialCategorias,
+    initialClientes,
+    initialMeta,
+  });
+  const estadoConexion = useDashboardRealtime(recargarDatos);
 
-  // NOTA: `initial*` (props) solo se usan para sembrar el estado en el primer
-  // render (SSR). NO se re-sincronizan en un useEffect: cada revalidatePath()
-  // de un Server Action re-renderiza DashboardPage con el MES ACTUAL (sin
-  // saber qué mes está viendo este cliente), así que un efecto que copie esas
-  // props a este estado pisaría el mes seleccionado con datos de otro mes.
-  // A partir del primer render, este componente es la única fuente de verdad
-  // para balance/presupuestos/gastosRecurrentes; se refrescan explícitamente
-  // vía recargarDatos()/cambiarMes() (disparados por mutaciones locales,
-  // Realtime, o al recuperar el foco — ver los efectos más abajo).
-
-  // Notificaciones Toast
-  const [toast, setToast] = useState<ToastMessage | null>(null);
-  // Identidad estable: ToastNotification tiene el temporizador de auto-cierre
-  // en un efecto que depende de esta función. Pasada en línea (`() =>
-  // setToast(null)`) cambiaba en cada render del dashboard, reiniciando la
-  // cuenta de 3.5 s una y otra vez — con Realtime activo el toast se quedaba
-  // pegado mucho más tiempo del previsto.
-  const cerrarToast = useCallback(() => setToast(null), []);
-
-  // Evita que una respuesta vieja (p. ej. una recarga disparada por Realtime
-  // justo antes de cambiar de mes) sobreescriba con datos obsoletos el
-  // resultado de una solicitud más reciente que ya resolvió.
-  const solicitudIdRef = useRef(0);
-
-  // Agrupa recargas que llegan casi juntas (p. ej. una mutación local que
-  // llama a recargarDatos() Y el evento Realtime del mismo INSERT que esa
-  // mutación acaba de generar, que llega ~100-200ms después) en una sola
-  // solicitud de red, en vez de repetir el mismo Promise.all de 3 consultas
-  // dos veces seguidas por cada acción del usuario.
-  const recargaTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // El mes vigente leído por REF, no por closure. Antes recargarDatos era un
-  // useCallback con deps [anio, mes], así que la función agendada en el
-  // setTimeout de la recarga se quedaba con el mes que estaba vigente cuando
-  // se agendó. Eso rompía el cambio de mes de forma muy visible:
-  //   1. el navegador dispara `focus`/`visibilitychange` (pasa SIEMPRE al
-  //      volver a la app, y también al primer clic tras recuperar el foco)
-  //      → se agenda una recarga del mes M para dentro de 300 ms;
-  //   2. el usuario toca "mes siguiente" → cambiarMes pide M+1;
-  //   3. a los 300 ms se dispara la recarga vieja, pide M y —al ser más
-  //      reciente— invalida la respuesta de M+1 con solicitudIdRef;
-  //   4. resultado: el encabezado dice M+1 pero los datos son los de M.
-  // Con la ref, cualquier recarga en vuelo apunta siempre al mes actual.
-  const mesVistaRef = useRef({ anio, mes });
-  mesVistaRef.current = { anio, mes };
-
-  const cancelarRecargaPendiente = useCallback(() => {
-    if (recargaTimeoutRef.current) {
-      clearTimeout(recargaTimeoutRef.current);
-      recargaTimeoutRef.current = null;
-    }
-  }, []);
-
-  // Recarga silenciosa en tiempo real (invocada por WebSockets, Server Actions
-  // locales, o al recuperar el foco/conexión). Identidad estable: no depende
-  // de [anio, mes], así que no se recrea en cada cambio de mes.
-  const recargarDatos = useCallback((mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => {
-    if (mensajeToast) {
-      setToast({
-        id: String(Date.now()),
-        texto: mensajeToast.texto,
-        tipo: mensajeToast.tipo ?? "success",
-      });
-    }
-
-    cancelarRecargaPendiente();
-    recargaTimeoutRef.current = setTimeout(() => {
-      recargaTimeoutRef.current = null;
-      const idSolicitud = ++solicitudIdRef.current;
-      const { anio: anioActual, mes: mesActual } = mesVistaRef.current;
-
-      startTransition(async () => {
-        try {
-          const datos = await obtenerDatosDashboard(anioActual, mesActual);
-          if (solicitudIdRef.current !== idSolicitud) return;
-          setBalance(datos.balance);
-          setPresupuestos(datos.presupuestos);
-          setGastosRecurrentes(datos.gastosRecurrentes);
-          setClientes(datos.clientes);
-          setMeta(datos.meta);
-          setCategorias(datos.categorias);
-        } catch (err) {
-          if (solicitudIdRef.current !== idSolicitud) return;
-          console.error("Error recargando datos del dashboard:", err);
-          setToast({
-            id: String(Date.now()),
-            texto: "No se pudieron actualizar los datos. Los que ves en pantalla podrían no ser los más recientes.",
-            tipo: "error",
-          });
-        }
-      });
-    }, 300);
-  }, [cancelarRecargaPendiente]);
-
-  useEffect(() => cancelarRecargaPendiente, [cancelarRecargaPendiente]);
-
-  // SUSCRIPCIÓN EN TIEMPO REAL VÍA SUPABASE WEBSOCKETS ⚡
-  // A propósito NO depende de [anio, mes]: el filtro por user_id no cambia
-  // con el mes que se está viendo, así que recrear el canal en cada cambio
-  // de mes solo tiraba la conexión WebSocket y forzaba un nuevo handshake de
-  // reconexión (se sentía como lentitud notoria al usar "mes siguiente/
-  // anterior"). Ahora se suscribe una sola vez por sesión del componente.
-  //
-  // Este mismo efecto maneja recuperar visibilidad/foco/reconexión a
-  // internet (antes vivía en un efecto aparte): la app es una PWA sin
-  // Service Worker, así que si se manda a segundo plano (o el celular se
-  // bloquea) por un rato, el WebSocket puede quedar en un estado "zombie" —
-  // ni conectado ni reconectando — sin que la librería lo note sola (se
-  // reportó como el indicador quedándose en "Reconectando..." indefinidamente).
-  // Por eso, al recuperar visibilidad, si el canal no quedó SUBSCRIBED, se
-  // resuscribe desde cero en vez de confiar en que se recupere solo.
-  useEffect(() => {
-    const supabase = createClient();
-    let canal: ReturnType<typeof supabase.channel> | null = null;
-    let cancelado = false;
-    // Empieza en `true` para no tratar la primera conexión como una
-    // "reconexión" (evitaría una recarga redundante justo tras el SSR inicial).
-    let estabaConectado = true;
-    let algunaVezVivo = false;
-    let ultimoFoco = Date.now();
-
-    function suscribir(userId: string) {
-      if (canal) supabase.removeChannel(canal);
-      const filtro = `user_id=eq.${userId}`;
-
-      canal = supabase
-        .channel(`realtime_dashboard_${userId}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "categorias", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "transacciones", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "presupuestos", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "gastos_recurrentes", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "metas_ahorro", filter: filtro }, () => recargarDatos())
-        .on("postgres_changes", { event: "*", schema: "public", table: "clientes", filter: filtro }, () => recargarDatos())
-        .subscribe((status) => {
-          if (cancelado) return;
-          const conectado = status === "SUBSCRIBED";
-          setEstadoConexion(conectado ? "vivo" : algunaVezVivo ? "caido" : "conectando");
-          if (conectado) algunaVezVivo = true;
-          // Si el canal se había caído (celular en background, red inestable)
-          // y se reconecta, pudimos perder eventos mientras estuvo caído:
-          // refrescamos para no quedarnos con datos desfasados.
-          if (conectado && !estabaConectado) {
-            recargarDatos();
-          }
-          estabaConectado = conectado;
-        });
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (cancelado || !session?.user) return;
-      suscribir(session.user.id);
-    });
-
-    function alRecuperarActividad() {
-      if (cancelado || document.visibilityState !== "visible") return;
-      const ahora = Date.now();
-      // Si la ventana recupera el foco casi de inmediato (primeros 30 s tras
-      // montar el componente o tras el último refresco), no saturar la red con
-      // recargas redundantes. Los datos de SSR aún están frescos y Realtime
-      // ya avisa de cualquier cambio.
-      if (ahora - ultimoFoco < 30_000) {
-        ultimoFoco = ahora;
-        return;
-      }
-      ultimoFoco = ahora;
-      recargarDatos();
-      if (!estabaConectado) {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (!cancelado && session?.user) suscribir(session.user.id);
-        });
-      }
-    }
-    document.addEventListener("visibilitychange", alRecuperarActividad);
-    window.addEventListener("focus", alRecuperarActividad);
-    window.addEventListener("online", alRecuperarActividad);
-
-    return () => {
-      cancelado = true;
-      setEstadoConexion("conectando");
-      document.removeEventListener("visibilitychange", alRecuperarActividad);
-      window.removeEventListener("focus", alRecuperarActividad);
-      window.removeEventListener("online", alRecuperarActividad);
-      if (canal) supabase.removeChannel(canal);
-    };
-    // recargarDatos tiene identidad estable (no depende de anio/mes), así que
-    // este efecto sigue corriendo una sola vez por sesión del componente.
-  }, [recargarDatos]);
-
-  function cambiarMes(nuevoAnio: number, nuevoMes: number) {
-    if (nuevoAnio === anio && nuevoMes === mes) return;
-
-    setAnio(nuevoAnio);
-    setMes(nuevoMes);
-    mesVistaRef.current = { anio: nuevoAnio, mes: nuevoMes };
-
-    // Cualquier recarga que quedó agendada (foco recuperado, evento Realtime,
-    // una mutación reciente) apuntaba al mes anterior: se cancela aquí para
-    // que no pise la petición de este mes al resolver después.
-    cancelarRecargaPendiente();
-
-    const idSolicitud = ++solicitudIdRef.current;
-
-    startTransition(async () => {
-      try {
-        const [nuevoBalance, nuevosPresupuestos] = await Promise.all([
-          obtenerBalanceMensual(nuevoAnio, nuevoMes),
-          obtenerPresupuestosConGasto(nuevoAnio, nuevoMes),
-        ]);
-        if (solicitudIdRef.current !== idSolicitud) return;
-        setBalance(nuevoBalance);
-        setPresupuestos(nuevosPresupuestos);
-        // Los gastos recurrentes no cambian con el mes, no hay que recargarlos
-      } catch (err) {
-        if (solicitudIdRef.current !== idSolicitud) return;
-        setAnio(balance.actual.anio);
-        setMes(balance.actual.mes);
-        mesVistaRef.current = { anio: balance.actual.anio, mes: balance.actual.mes };
-        console.error("Error cambiando de mes:", err);
-        setToast({
-          id: String(Date.now()),
-          texto: "No se pudo cargar ese mes. Intenta de nuevo.",
-          tipo: "error",
-        });
-      }
-    });
-  }
-
-  // Async y devuelve la promesa (no se envuelve en startTransition: eso ya
-  // lo hace recargarDatos internamente) para que RecurringExpenses pueda
-  // esperar a que termine y deshabilitar sus botones de "Pagar" mientras
-  // tanto — sin eso, un doble clic alcanzaba a disparar dos cobros reales
-  // antes de que la UI reflejara que ya se había registrado el primero.
   async function registrarGastoRecurrente(datos: {
     categoria_id: string;
     monto: number;
@@ -319,8 +74,7 @@ export function DashboardContainer({
         tipo: "success",
       });
     } catch (err) {
-      setToast({
-        id: String(Date.now()),
+      mostrarToast({
         texto: err instanceof Error ? err.message : "Error registrando cobro.",
         tipo: "error",
       });

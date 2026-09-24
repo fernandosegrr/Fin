@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Flag, Pencil, Trash2, X, Loader2, Target, Check } from "lucide-react";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto, parsearMonto, redondearMonto } from "@/lib/format";
-import { useEscapeKey } from "@/lib/use-escape-key";
-import { eliminarMetaAhorro, guardarMetaAhorro } from "@/app/dashboard/actions";
+import { formatearMonto } from "@/lib/format";
 import type { MetaAhorro } from "@/lib/types";
+import { useSavingsGoal } from "./goals/use-savings-goal";
 
 interface Props {
   meta: MetaAhorro | null;
@@ -16,58 +14,10 @@ interface Props {
 }
 
 export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [nombre, setNombre] = useState(meta?.nombre ?? "");
-  const [montoTexto, setMontoTexto] = useState(meta ? String(meta.monto_objetivo) : "");
-  const [fecha, setFecha] = useState(meta?.fecha_limite ?? "");
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEscapeKey(modalAbierto, () => setModalAbierto(false));
-
-  function abrir() {
-    setNombre(meta?.nombre ?? "");
-    setMontoTexto(meta ? String(meta.monto_objetivo) : "");
-    setFecha(meta?.fecha_limite ?? "");
-    setError(null);
-    setModalAbierto(true);
-  }
-
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
-    const monto = parsearMonto(montoTexto);
-    setGuardando(true);
-    setError(null);
-    const resultado = await guardarMetaAhorro({
-      nombre,
-      monto_objetivo: monto,
-      fecha_limite: fecha || null,
-    });
-    setGuardando(false);
-    if (!resultado.ok) {
-      setError(resultado.error);
-      return;
-    }
-    setModalAbierto(false);
-    onCambio({ texto: "Meta de ahorro guardada.", tipo: "success" });
-  }
-
-  async function borrar() {
-    if (!confirm("¿Quitar la meta de ahorro?")) return;
-    try {
-      await eliminarMetaAhorro();
-      onCambio({ texto: "Meta de ahorro eliminada.", tipo: "info" });
-    } catch (err) {
-      onCambio({
-        texto: err instanceof Error ? err.message : "No se pudo eliminar la meta.",
-        tipo: "error",
-      });
-    }
-  }
-
-  const objetivo = meta?.monto_objetivo ?? 0;
-  const porcentaje = objetivo > 0 ? Math.min(100, Math.round((Math.max(0, saldoActual) / objetivo) * 100)) : 0;
-  const restante = redondearMonto(objetivo - saldoActual);
+  const {
+    modalAbierto, setModalAbierto, nombre, setNombre, montoTexto, setMontoTexto, fecha, setFecha,
+    guardando, error, abrir, guardar, borrar, objetivo, porcentaje, restante,
+  } = useSavingsGoal({ meta, saldoActual, onCambio });
 
   return (
     <>
@@ -190,8 +140,9 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
             </div>
             <form onSubmit={guardar} className="mt-4 space-y-3.5">
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Nombre</label>
+                <label htmlFor="meta-nombre" className="block text-xs font-medium text-slate-400 mb-1">Nombre</label>
                 <input
+                  id="meta-nombre"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Fondo de emergencia, Viaje..."
@@ -200,10 +151,11 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Monto objetivo</label>
+                <label htmlFor="meta-monto" className="block text-xs font-medium text-slate-400 mb-1">Monto objetivo</label>
                 <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-violet-400/60">
                   <span className="text-lg font-bold text-slate-400 mr-2">$</span>
                   <input
+                    id="meta-monto"
                     type="text"
                     inputMode="decimal"
                     value={montoTexto}
@@ -215,10 +167,11 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">
+                <label htmlFor="meta-fecha" className="block text-xs font-medium text-slate-400 mb-1">
                   Fecha límite (opcional)
                 </label>
                 <input
+                  id="meta-fecha"
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}

@@ -1,15 +1,14 @@
 "use client";
 
-import { startTransition, useOptimistic, useState, useMemo } from "react";
 import { Search, Plus, Layers, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { crearTransaccion, actualizarTransaccion, eliminarTransaccion, crearCliente } from "@/app/dashboard/actions";
-import { formatearFechaCorta, hoyISOEnMexico } from "@/lib/dates";
+import { formatearFechaCorta } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
-import type { Categoria, Cliente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
-import { TransactionCaptureModal, type DatosNuevaTransaccion } from "./transaction-capture-modal";
+import type { Categoria, Cliente, TransaccionConCategoria } from "@/lib/types";
+import { TransactionCaptureModal } from "./transaction-capture-modal";
 import { CategoryManagerModal } from "./category-manager-modal";
+import { useTransactions } from "./transactions/use-transactions";
 
 interface Props {
   initialTransacciones: TransaccionConCategoria[];
@@ -20,10 +19,6 @@ interface Props {
   onTransaccionCambiada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
-type TransaccionOptimista = TransaccionConCategoria & { pendiente?: boolean };
-
-let contadorOptimista = 0;
-
 export function TransactionsSection({
   initialTransacciones,
   totalTransacciones,
@@ -31,175 +26,11 @@ export function TransactionsSection({
   clientes = [],
   onTransaccionCambiada,
 }: Props) {
-  const [modalCapturaAbierto, setModalCapturaAbierto] = useState(false);
-  const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
-  const [transaccionAEditar, setTransaccionAEditar] = useState<TransaccionConCategoria | null>(null);
-  
-  // Filtros
-  const [busqueda, setBusqueda] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | "ingreso" | "egreso">("todos");
-  const [filtroMetodo, setFiltroMetodo] = useState<"todos" | MetodoPago>("todos");
-
-  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
-
-  const [transacciones, setTransaccionesOptimista] = useOptimistic<
-    TransaccionOptimista[],
-    { accion: "crear" | "actualizar" | "eliminar"; item: TransaccionOptimista }
-  >(initialTransacciones, (estado, payload) => {
-    if (payload.accion === "crear") {
-      return [payload.item, ...estado];
-    }
-    if (payload.accion === "actualizar") {
-      return estado.map((t) => (t.id === payload.item.id ? payload.item : t));
-    }
-    if (payload.accion === "eliminar") {
-      return estado.filter((t) => t.id !== payload.item.id);
-    }
-    return estado;
-  });
-
-  // Filtrado de transacciones
-  const transaccionesFiltradas = useMemo(() => {
-    return transacciones.filter((t) => {
-      const cumpleBusqueda =
-        !busqueda.trim() ||
-        (t.descripcion || "").toLowerCase().includes(busqueda.trim().toLowerCase()) ||
-        (t.categoria?.nombre || "").toLowerCase().includes(busqueda.trim().toLowerCase()) ||
-        (t.cliente?.nombre || "").toLowerCase().includes(busqueda.trim().toLowerCase());
-
-      const cumpleTipo = filtroTipo === "todos" || t.categoria?.tipo === filtroTipo;
-      const cumpleMetodo = filtroMetodo === "todos" || (t.metodo_pago || "tarjeta") === filtroMetodo;
-
-      return cumpleBusqueda && cumpleTipo && cumpleMetodo;
-    });
-  }, [transacciones, busqueda, filtroTipo, filtroMetodo]);
-
-  async function resolverClienteId(datos: DatosNuevaTransaccion): Promise<string | null> {
-    if (datos.tipo !== "ingreso") return null;
-    if (datos.cliente_id) return datos.cliente_id;
-    if (datos.cliente_nuevo?.trim()) {
-      const creado = await crearCliente(datos.cliente_nuevo.trim());
-      return creado.id;
-    }
-    return null;
-  }
-
-  function manejarEnvio(datos: DatosNuevaTransaccion) {
-    const categoria = categorias.find((c) => c.id === datos.categoria_id) ?? null;
-    contadorOptimista += 1;
-
-    const esIngreso = datos.tipo === "ingreso";
-
-    if (datos.id) {
-      // Editar
-      const actualizada: TransaccionOptimista = {
-        id: datos.id,
-        user_id: "",
-        categoria_id: datos.categoria_id,
-        monto: datos.monto,
-        metodo_pago: datos.metodo_pago,
-        fecha: datos.fecha || hoyISOEnMexico(),
-        descripcion: datos.descripcion,
-        creado_en: "",
-        categoria: categoria
-          ? { id: categoria.id, nombre: categoria.nombre, tipo: categoria.tipo, grupo: categoria.grupo }
-          : null,
-        pendiente: true,
-      };
-
-      setErrorEnvio(null);
-      startTransition(async () => {
-        setTransaccionesOptimista({ accion: "actualizar", item: actualizada });
-        try {
-          const clienteId = await resolverClienteId(datos);
-          await actualizarTransaccion(datos.id!, {
-            categoria_id: datos.categoria_id,
-            monto: datos.monto,
-            descripcion: datos.descripcion,
-            metodo_pago: datos.metodo_pago,
-            fecha: datos.fecha,
-            cliente_id: clienteId,
-          });
-          onTransaccionCambiada?.({
-            texto: `¡Movimiento de ${formatearMonto(datos.monto)} actualizado con éxito! ✏️`,
-            tipo: "success",
-          });
-        } catch (err) {
-          setErrorEnvio(err instanceof Error ? err.message : "Error al actualizar.");
-        }
-      });
-    } else {
-      // Crear
-      const fecha = datos.fecha || hoyISOEnMexico();
-      const nueva: TransaccionOptimista = {
-        id: `optimista-${contadorOptimista}`,
-        user_id: "",
-        categoria_id: datos.categoria_id,
-        monto: datos.monto,
-        metodo_pago: datos.metodo_pago,
-        fecha,
-        descripcion: datos.descripcion,
-        creado_en: "",
-        categoria: categoria
-          ? { id: categoria.id, nombre: categoria.nombre, tipo: categoria.tipo, grupo: categoria.grupo }
-          : null,
-        pendiente: true,
-      };
-
-      setErrorEnvio(null);
-      startTransition(async () => {
-        setTransaccionesOptimista({ accion: "crear", item: nueva });
-        try {
-          const clienteId = await resolverClienteId(datos);
-          await crearTransaccion({
-            categoria_id: datos.categoria_id,
-            monto: datos.monto,
-            descripcion: datos.descripcion,
-            metodo_pago: datos.metodo_pago,
-            fecha,
-            cliente_id: clienteId,
-          });
-          onTransaccionCambiada?.({
-            texto: esIngreso
-              ? `¡Ingreso de ${formatearMonto(datos.monto)} registrado! 💰`
-              : `¡Egreso de ${formatearMonto(datos.monto)} registrado! 🧾`,
-            tipo: "success",
-          });
-        } catch (err) {
-          setErrorEnvio(err instanceof Error ? err.message : "Error al guardar el movimiento.");
-        }
-      });
-    }
-  }
-
-  function manejarEliminar(id: string) {
-    const itemEliminar = transacciones.find((t) => t.id === id);
-    if (!itemEliminar) return;
-
-    setErrorEnvio(null);
-    startTransition(async () => {
-      setTransaccionesOptimista({ accion: "eliminar", item: itemEliminar });
-      try {
-        await eliminarTransaccion(id);
-        onTransaccionCambiada?.({
-          texto: "¡Movimiento eliminado con éxito! 🗑️",
-          tipo: "info",
-        });
-      } catch (err) {
-        setErrorEnvio(err instanceof Error ? err.message : "No se pudo eliminar el movimiento.");
-      }
-    });
-  }
-
-  function abrirEdicion(t: TransaccionConCategoria) {
-    setTransaccionAEditar(t);
-    setModalCapturaAbierto(true);
-  }
-
-  function abrirNuevo() {
-    setTransaccionAEditar(null);
-    setModalCapturaAbierto(true);
-  }
+  const {
+    modalCapturaAbierto, setModalCapturaAbierto, modalCategoriasAbierto, setModalCategoriasAbierto,
+    transaccionAEditar, busqueda, setBusqueda, filtroTipo, setFiltroTipo, filtroMetodo, setFiltroMetodo,
+    errorEnvio, transacciones, transaccionesFiltradas, manejarEnvio, manejarEliminar, abrirEdicion, abrirNuevo,
+  } = useTransactions({ initialTransacciones, categorias, clientes, onTransaccionCambiada });
 
   return (
     <>
@@ -357,13 +188,14 @@ export function TransactionsSection({
                 const esEfectivo = t.metodo_pago === "efectivo";
 
                 return (
-                  <div
+                  <button
                     key={t.id}
+                    type="button"
+                    disabled={t.pendiente}
                     onClick={() => {
-                      if (t.pendiente) return;
                       abrirEdicion(t);
                     }}
-                    className={`group flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/50 border border-white/[0.05] hover:border-white/[0.15] hover:bg-slate-900/60 transition-all ${
+                    className={`group flex w-full items-center justify-between p-3.5 text-left rounded-2xl bg-slate-950/50 border border-white/[0.05] hover:border-white/[0.15] hover:bg-slate-900/60 transition-all ${
                       t.pendiente ? "opacity-50 cursor-wait" : "cursor-pointer"
                     }`}
                   >
@@ -417,7 +249,7 @@ export function TransactionsSection({
                         {formatearMonto(t.monto)}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

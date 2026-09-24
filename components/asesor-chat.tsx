@@ -1,18 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { Bot, Eraser, Loader2, Send, Sparkles } from "lucide-react";
-import {
-  borrarHistorialAsesor,
-  enviarMensajeAsesor,
-  obtenerHistorialAsesor,
-} from "@/app/dashboard/asesor-actions";
-import { capitalizarPrimeraLetra } from "@/lib/format";
 import { nombreDelMes } from "@/lib/dates";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import type { MensajeAsesor } from "@/lib/types";
-
-type MensajeUI = MensajeAsesor & { esError?: boolean };
+import { MAX_CARACTERES, useAdvisorChat } from "./advisor/use-advisor-chat";
 
 interface Props {
   /** Mes que el usuario tiene abierto en el dashboard: el asesor razona sobre ESE mes, no sobre el de hoy. */
@@ -20,7 +11,6 @@ interface Props {
   mes: number;
 }
 
-const MAX_CARACTERES = 4000;
 const SUGERENCIAS = [
   "¿Cómo voy este mes?",
   "¿En qué categoría gasto más?",
@@ -28,141 +18,11 @@ const SUGERENCIAS = [
 ];
 
 export function AsesorChat({ anio, mes }: Props) {
-  const [mensajes, setMensajes] = useState<MensajeUI[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [errorCarga, setErrorCarga] = useState<string | null>(null);
-  const [intentoCarga, setIntentoCarga] = useState(0);
-  const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [borrando, setBorrando] = useState(false);
-  const finRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const enviandoRef = useRef(false);
-
-  useEffect(() => {
-    let cancelado = false;
-    setCargando(true);
-    setErrorCarga(null);
-    obtenerHistorialAsesor()
-      .then((resultado) => {
-        if (cancelado) return;
-        if (resultado.ok) setMensajes(resultado.mensajes);
-        else setErrorCarga(resultado.error);
-      })
-      .catch((err) => {
-        if (!cancelado) setErrorCarga(err instanceof Error ? err.message : "No se pudo cargar el historial.");
-      })
-      .finally(() => {
-        if (!cancelado) setCargando(false);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [intentoCarga]);
-
-  useEffect(() => {
-    finRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [mensajes.length, enviando]);
-
-  function ajustarAlturaTextarea() {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
-  }
-
-  function enviarMensaje(contenidoForzado?: string) {
-    const contenidoEnviar = (contenidoForzado ?? texto).trim();
-    if (!contenidoEnviar || enviandoRef.current) return;
-    if (contenidoEnviar.length > MAX_CARACTERES) return;
-
-    const mensajeUsuario: MensajeUI = {
-      id: `local-${Date.now()}`,
-      rol: "usuario",
-      contenido: contenidoEnviar,
-      creado_en: new Date().toISOString(),
-    };
-
-    enviandoRef.current = true;
-    setTexto("");
-    setEnviando(true);
-    setMensajes((prev) => [...prev, mensajeUsuario]);
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-    });
-
-    enviarMensajeAsesor(contenidoEnviar, anio, mes)
-      .then((resultado) => {
-        if (resultado.ok) {
-          setMensajes((prev) => [...prev, resultado.mensajeAsistente]);
-        } else {
-          setMensajes((prev) => [
-            ...prev,
-            {
-              id: `error-${Date.now()}`,
-              rol: "asistente",
-              contenido: resultado.error,
-              creado_en: new Date().toISOString(),
-              esError: true,
-            },
-          ]);
-        }
-      })
-      .catch((err: unknown) => {
-        setMensajes((prev) => [
-          ...prev,
-          {
-            id: `error-${Date.now()}`,
-            rol: "asistente",
-            contenido: err instanceof Error ? err.message : "No se pudo obtener respuesta.",
-            creado_en: new Date().toISOString(),
-            esError: true,
-          },
-        ]);
-      })
-      .finally(() => {
-        enviandoRef.current = false;
-        setEnviando(false);
-      });
-  }
-
-  function manejarSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    enviarMensaje();
-  }
-
-  function manejarTeclaTextarea(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      enviarMensaje();
-    }
-  }
-
-  async function borrarConversacion() {
-    if (enviando || borrando) return;
-    if (!confirm("¿Borrar la conversación? Las notas que el asesor recuerde de ti se conservan.")) return;
-    setBorrando(true);
-    const resultado = await borrarHistorialAsesor();
-    setBorrando(false);
-    if (resultado.ok) setMensajes([]);
-    else {
-      setMensajes((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          rol: "asistente",
-          contenido: resultado.error,
-          creado_en: new Date().toISOString(),
-          esError: true,
-        },
-      ]);
-    }
-  }
-
-  const nombreMes = capitalizarPrimeraLetra(nombreDelMes(anio, mes));
-  const cercaDelLimite = texto.length > MAX_CARACTERES - 400;
+  const {
+    mensajes, cargando, errorCarga, texto, setTexto, enviando, borrando, finRef, textareaRef,
+    enviarMensaje, ajustarAlturaTextarea, manejarSubmit, manejarTeclaTextarea,
+    borrarConversacion, nombreMes, cercaDelLimite, reintentarCarga,
+  } = useAdvisorChat(anio, mes);
 
   return (
     <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950/90 shadow-2xl shadow-black/40 overflow-hidden flex flex-col backdrop-blur-2xl">
@@ -205,7 +65,7 @@ export function AsesorChat({ anio, mes }: Props) {
             <p className="text-xs text-rose-400 mb-2">{errorCarga}</p>
             <button
               type="button"
-              onClick={() => setIntentoCarga((n) => n + 1)}
+              onClick={reintentarCarga}
               className="text-xs font-bold text-rose-300 hover:text-rose-200 underline"
             >
               Reintentar
@@ -283,7 +143,7 @@ export function AsesorChat({ anio, mes }: Props) {
             placeholder="Pregunta algo o anota un movimiento..."
             rows={1}
             maxLength={MAX_CARACTERES}
-            readOnly={enviando}
+            readOnly={enviando || cargando || Boolean(errorCarga)}
             className="w-full bg-transparent text-xs sm:text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none resize-none"
           />
           {cercaDelLimite && (
@@ -292,7 +152,7 @@ export function AsesorChat({ anio, mes }: Props) {
             </p>
           )}
         </div>
-        <GlowButton type="submit" variant="primary" disabled={enviando || !texto.trim()} className="!p-3 shrink-0 rounded-2xl">
+        <GlowButton type="submit" variant="primary" disabled={enviando || cargando || Boolean(errorCarga) || !texto.trim()} className="!p-3 shrink-0 rounded-2xl">
           {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </GlowButton>
       </form>

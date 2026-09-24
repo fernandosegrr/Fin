@@ -1,31 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import { BrandLogo } from "./brand-logo";
 import { DashboardNavigation, sections } from "./dashboard-navigation";
-import { MonthInsights } from "./month-insights";
 import { LogOut, Search } from "lucide-react";
-import { BalanceResumen } from "@/components/balance-resumen";
-import { AnalyticsSummary } from "@/components/analytics-summary";
-import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
-import { TransactionsSection } from "@/components/transactions-section";
-import { RecurringExpenses } from "@/components/recurring-expenses";
 import { MonthSelector } from "@/components/month-selector";
 import { ExportButton } from "@/components/export-button";
 import { ToastNotification } from "@/components/toast-notification";
 import { BottomNavigationBar, type TabId } from "@/components/bottom-navigation-bar";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { crearTransaccion, signOut } from "@/app/dashboard/actions";
-import { primerDiaDelMes } from "@/lib/dates";
 import type { MetodoPago } from "@/lib/types";
 import { useDashboardData, type DashboardInitialData } from "./dashboard/use-dashboard-data";
 import { useDashboardRealtime } from "./dashboard/use-dashboard-realtime";
-import { SavingsGoalCard } from "@/components/savings-goal-card";
 import { HistorialModal } from "@/components/historial-modal";
-
-const FinancialCharts = dynamic(() => import("./financial-charts").then(m => m.FinancialCharts), { loading: () => <p role="status" className="p-6 text-slate-400">Cargando gráficas…</p> });
-const AsesorChat = dynamic(() => import("./asesor-chat").then(m => m.AsesorChat), { loading: () => <p role="status" className="p-6 text-slate-400">Abriendo asesor…</p> });
+import { DashboardContent } from "./dashboard/dashboard-content";
 
 export function DashboardContainer({
   initialBalance,
@@ -38,11 +27,7 @@ export function DashboardContainer({
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [asesorVisitado, setAsesorVisitado] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
-  const {
-    categorias, balance, presupuestos, gastosRecurrentes, clientes, meta,
-    anio, mes, isPending, toast, cerrarToast, mostrarToast,
-    recargarDatos, cambiarMes,
-  } = useDashboardData({
+  const data = useDashboardData({
     initialBalance,
     initialPresupuestos,
     initialGastosRecurrentes,
@@ -50,6 +35,7 @@ export function DashboardContainer({
     initialClientes,
     initialMeta,
   });
+  const { balance, anio, mes, isPending, toast, cerrarToast, mostrarToast, recargarDatos, cambiarMes } = data;
   const estadoConexion = useDashboardRealtime(recargarDatos);
 
   async function registrarGastoRecurrente(datos: {
@@ -81,11 +67,6 @@ export function DashboardContainer({
       throw err;
     }
   }
-
-  // El mes del presupuesto debe ser el que YA está cargado en pantalla, no el
-  // que se acaba de pedir: entre el clic de "mes siguiente" y la respuesta,
-  // `anio`/`mes` ya cambiaron pero `presupuestos` sigue siendo del mes viejo.
-  const mesISO = primerDiaDelMes(balance.actual.anio, balance.actual.mes);
 
   const section = sections.find((item) => item.id === tabActiva)!;
   function cambiarTab(tab: TabId) {
@@ -178,90 +159,12 @@ export function DashboardContainer({
         </div>
       )}
 
-      {/* CONTENIDO DE PESTAÑAS */}
-      <div id="contenido" tabIndex={-1} aria-busy={isPending} className="mt-1">
-        {/* Pestaña 1: INICIO (Saldo Total + Movimientos del Mes) */}
-        {tabActiva === "inicio" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <MonthInsights actual={balance.actual} />
-            <div className="overview-grid">
-            <BalanceResumen
-              actual={balance.actual}
-              onTransferenciaRealizada={recargarDatos}
-            />
-            <SavingsGoalCard
-              meta={meta}
-              saldoActual={balance.actual.saldoTotalDisponible}
-              onCambio={recargarDatos}
-            />
-            </div>
-            <TransactionsSection
-              // Se llavea con el mes YA CARGADO, no con el solicitado: entre
-              // el clic y la respuesta del servidor, `anio`/`mes` ya cambiaron
-              // pero `balance` todavía es del mes anterior, así que llavear
-              // con el solicitado remontaba la lista sembrándola con los
-              // movimientos del mes viejo (parpadeo de datos equivocados).
-              key={`${balance.actual.anio}-${balance.actual.mes}`}
-              initialTransacciones={balance.actual.transacciones}
-              totalTransacciones={balance.actual.totalTransaccionesMes}
-              categorias={categorias}
-              clientes={clientes}
-              onTransaccionCambiada={recargarDatos}
-            />
-          </div>
-        )}
-
-        {/* Pestaña 2: SUSCRIPCIONES (Gastos Recurrentes + Cobro en 1 clic) */}
-        {tabActiva === "suscripciones" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <RecurringExpenses
-              categorias={categorias}
-              initialGastosRecurrentes={gastosRecurrentes}
-              recurrentesCobrados={balance.actual.recurrentesCobrados}
-              anio={balance.actual.anio}
-              mes={balance.actual.mes}
-              onRegistrarTransaccion={registrarGastoRecurrente}
-              onListaCambiada={recargarDatos}
-            />
-          </div>
-        )}
-
-        {/* Pestaña 3: ESTADÍSTICAS (Métricas + Gráficas de Dona y Flujo) */}
-        {tabActiva === "estadisticas" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <AnalyticsSummary
-              egresosFijos={balance.actual.egresosFijos}
-              egresosVariables={balance.actual.egresosVariables}
-              egresosPorCategoria={balance.actual.egresosPorCategoria}
-              totalEgresos={balance.actual.egresos}
-              ingresosPorCliente={balance.actual.ingresosPorCliente}
-              anio={balance.actual.anio}
-              mes={balance.actual.mes}
-            />
-            <FinancialCharts
-              egresosPorCategoria={balance.actual.egresosPorCategoria}
-              ingresosTotales={balance.actual.ingresos}
-              egresosTotales={balance.actual.egresos}
-            />
-          </div>
-        )}
-
-        {/* Pestaña 4: PRESUPUESTOS (Barras de Salud Financiera y Límites) */}
-        {tabActiva === "presupuestos" && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <PresupuestosProgreso items={presupuestos} mesISO={mesISO} onPresupuestosGuardados={recargarDatos} />
-          </div>
-        )}
-
-        {/* Pestaña 5: ASESOR — se monta la primera vez que se abre y se queda
-            vivo (hidden) para no perder el borrador, el "pensando…" ni recargar
-            el historial cada vez que se cambia de pestaña. */}
-        {asesorVisitado && (
-          <div className={tabActiva === "asesor" ? "space-y-4 animate-in fade-in duration-300" : "hidden"}>
-            <AsesorChat anio={balance.actual.anio} mes={balance.actual.mes} />
-          </div>
-        )}
-      </div>
+      <DashboardContent
+        tabActiva={tabActiva}
+        asesorVisitado={asesorVisitado}
+        data={data}
+        registrarGastoRecurrente={registrarGastoRecurrente}
+      />
 
       {/* Navegación por Pestañas Inferior (Bottom Nav Bar) */}
       <HistorialModal abierto={historialAbierto} onCerrar={() => setHistorialAbierto(false)} />

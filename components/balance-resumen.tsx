@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -18,27 +18,17 @@ import {
 import { SpotlightCard } from "@/components/react-bits/SpotlightCard";
 import { AnimatedNumber } from "@/components/react-bits/AnimatedNumber";
 import { GlowButton } from "@/components/react-bits/GlowButton";
-import { formatearMonto, parsearMonto } from "@/lib/format";
-import { formatearFechaCorta, hoyEnMexico, hoyISOEnMexico } from "@/lib/dates";
-import {
-  ajustarSaldo,
-  actualizarTransferencia,
-  crearTransferencia,
-  eliminarTransferencia,
-  type BalanceMensual,
-} from "@/app/dashboard/actions";
-import { useEscapeKey } from "@/lib/use-escape-key";
-import type { DesgloseMetodoPago, MetodoPago, Transferencia } from "@/lib/types";
+import { formatearMonto } from "@/lib/format";
+import { formatearFechaCorta } from "@/lib/dates";
+import { type BalanceMensual } from "@/app/dashboard/actions";
+import type { DesgloseMetodoPago } from "@/lib/types";
+import { NOMBRE_METODO, useBalanceActions } from "./balance/use-balance-actions";
 
 interface Props {
   actual: BalanceMensual["actual"];
   onTransferenciaRealizada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
-const NOMBRE_METODO: Record<MetodoPago, string> = {
-  tarjeta: "Tarjeta",
-  efectivo: "Efectivo",
-};
 
 function DesgloseMetodo({
   icono,
@@ -72,153 +62,14 @@ function DesgloseMetodo({
 }
 
 export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
-  const saldoPositivo = actual.saldoTotalDisponible >= 0;
-
-  // Fondos disponibles del mes: incluye el saldo que llegó de meses anteriores.
-  const fondosDelMes = Math.max(0, actual.saldoInicial + actual.ingresos);
-  const porcentajeDisponible = fondosDelMes > 0
-    ? Math.max(0, Math.round((actual.saldoTotalDisponible / fondosDelMes) * 100))
-    : 0;
-
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [montoTexto, setMontoTexto] = useState("");
-  const [origen, setOrigen] = useState<MetodoPago>("tarjeta");
-  const [descripcion, setDescripcion] = useState("");
-  const [fecha, setFecha] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
-  const [errorForm, setErrorForm] = useState<string | null>(null);
-  const [transferenciaEditandoId, setTransferenciaEditandoId] = useState<string | null>(null);
-  const [modalAjuste, setModalAjuste] = useState(false);
-  const [ajusteMetodo, setAjusteMetodo] = useState<MetodoPago>("efectivo");
-  const [ajusteMonto, setAjusteMonto] = useState("");
-  const [ajusteError, setAjusteError] = useState<string | null>(null);
-  const [ajusteSaving, setAjusteSaving] = useState(false);
-
-  const destino: MetodoPago = origen === "tarjeta" ? "efectivo" : "tarjeta";
-  const hoy = hoyEnMexico();
-  const esMesEnCurso = actual.anio === hoy.anio && actual.mes === hoy.mes;
-
-  useEscapeKey(modalAbierto, () => setModalAbierto(false));
-  useEscapeKey(modalAjuste, () => setModalAjuste(false));
-
-  function abrirModalAjuste() {
-    const metodoInicial: MetodoPago = "efectivo";
-    setAjusteMetodo(metodoInicial);
-    setAjusteMonto(esMesEnCurso ? String(actual.totalesEfectivo.saldo) : "");
-    setAjusteError(null);
-    setModalAjuste(true);
-  }
-
-  async function manejarAjuste(e: React.FormEvent) {
-    e.preventDefault();
-    const objetivo = parsearMonto(ajusteMonto);
-    if (!Number.isFinite(objetivo)) {
-      setAjusteError("Ingresa el saldo real que tienes.");
-      return;
-    }
-    setAjusteSaving(true);
-    setAjusteError(null);
-    const resultado = await ajustarSaldo(ajusteMetodo, objetivo);
-    setAjusteSaving(false);
-    if (!resultado.ok) {
-      setAjusteError(resultado.error);
-      return;
-    }
-    setModalAjuste(false);
-    const signo = resultado.diferencia >= 0 ? "+" : "−";
-    onTransferenciaRealizada?.({
-      texto: `Saldo de ${NOMBRE_METODO[ajusteMetodo]} ajustado (${signo}${formatearMonto(Math.abs(resultado.diferencia))}).`,
-      tipo: "success",
-    });
-  }
-
-  function abrirModalTransferencia() {
-    setMontoTexto("");
-    setDescripcion("");
-    setOrigen("tarjeta");
-    setFecha(hoyISOEnMexico());
-    setErrorForm(null);
-    setTransferenciaEditandoId(null);
-    setModalAbierto(true);
-  }
-
-  function abrirEdicionTransferencia(t: Transferencia) {
-    setMontoTexto(String(t.monto));
-    setDescripcion(t.descripcion ?? "");
-    setOrigen(t.origen);
-    setFecha(t.fecha);
-    setErrorForm(null);
-    setTransferenciaEditandoId(t.id);
-    setModalAbierto(true);
-  }
-
-  function cancelarEdicionTransferencia() {
-    setTransferenciaEditandoId(null);
-    setMontoTexto("");
-    setDescripcion("");
-    setOrigen("tarjeta");
-    setFecha(hoyISOEnMexico());
-    setErrorForm(null);
-  }
-
-  async function manejarEnvioTransferencia(e: React.FormEvent) {
-    e.preventDefault();
-    const monto = parsearMonto(montoTexto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      setErrorForm("Ingresa un monto válido mayor a 0.");
-      return;
-    }
-
-    setIsSaving(true);
-    setErrorForm(null);
-    try {
-      if (transferenciaEditandoId) {
-        await actualizarTransferencia(transferenciaEditandoId, {
-          monto,
-          origen,
-          destino,
-          descripcion: descripcion.trim() || null,
-          fecha,
-        });
-        setModalAbierto(false);
-        onTransferenciaRealizada?.({
-          texto: `Traspaso corregido: ${formatearMonto(monto)} de ${NOMBRE_METODO[origen]} a ${NOMBRE_METODO[destino]}. ✏️`,
-          tipo: "success",
-        });
-      } else {
-        await crearTransferencia({ monto, origen, destino, descripcion: descripcion.trim() || null, fecha });
-        setModalAbierto(false);
-        onTransferenciaRealizada?.({
-          texto: `¡Traspaso de ${formatearMonto(monto)} de ${NOMBRE_METODO[origen]} a ${NOMBRE_METODO[destino]} registrado! ⇄`,
-          tipo: "success",
-        });
-      }
-    } catch (err) {
-      setErrorForm(err instanceof Error ? err.message : "Error al registrar el traspaso.");
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function manejarEliminarTransferencia(id: string) {
-    if (eliminandoId) return;
-    if (!confirm("¿Eliminar este traspaso? El saldo de cada método se revertirá.")) return;
-    setEliminandoId(id);
-    setErrorForm(null);
-    try {
-      await eliminarTransferencia(id);
-      if (transferenciaEditandoId === id) cancelarEdicionTransferencia();
-      onTransferenciaRealizada?.({
-        texto: "Traspaso eliminado.",
-        tipo: "info",
-      });
-    } catch (err) {
-      setErrorForm(err instanceof Error ? err.message : "No se pudo eliminar el traspaso.");
-    } finally {
-      setEliminandoId(null);
-    }
-  }
+  const {
+    saldoPositivo, porcentajeDisponible, modalAbierto, setModalAbierto, montoTexto, setMontoTexto,
+    origen, setOrigen, descripcion, setDescripcion, fecha, setFecha, isSaving, eliminandoId,
+    errorForm, transferenciaEditandoId, modalAjuste, setModalAjuste, ajusteMetodo, setAjusteMetodo,
+    ajusteMonto, setAjusteMonto, ajusteError, ajusteSaving, destino, esMesEnCurso,
+    abrirModalAjuste, manejarAjuste, abrirModalTransferencia, abrirEdicionTransferencia,
+    cancelarEdicionTransferencia, manejarEnvioTransferencia, manejarEliminarTransferencia,
+  } = useBalanceActions({ actual, onTransferenciaRealizada });
 
   return (
     <>
@@ -387,10 +238,11 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
             {/* Origen -> Destino */}
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Desde</label>
-              <div className="grid grid-cols-2 gap-2">
+              <span className="block text-xs font-medium text-slate-400 mb-1">Desde</span>
+              <div role="group" aria-label="Cuenta de origen" className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
+                  aria-pressed={origen === "tarjeta"}
                   onClick={() => setOrigen("tarjeta")}
                   className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                     origen === "tarjeta"
@@ -403,6 +255,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={origen === "efectivo"}
                   onClick={() => setOrigen("efectivo")}
                   className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border transition-all text-xs font-semibold ${
                     origen === "efectivo"
@@ -430,10 +283,11 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
             {/* Monto */}
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Monto a traspasar</label>
+              <label htmlFor="traspaso-monto" className="block text-xs font-medium text-slate-400 mb-1">Monto a traspasar</label>
               <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-indigo-400/60">
                 <span className="text-lg font-bold text-slate-400 mr-2">$</span>
                 <input
+                  id="traspaso-monto"
                   type="text"
                   inputMode="decimal"
                   autoComplete="off"
@@ -447,8 +301,9 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
             {/* Descripción */}
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Descripción (opcional)</label>
+              <label htmlFor="traspaso-descripcion" className="block text-xs font-medium text-slate-400 mb-1">Descripción (opcional)</label>
               <input
+                id="traspaso-descripcion"
                 type="text"
                 placeholder="Ej. Retiro de cajero, Depósito..."
                 value={descripcion}
@@ -459,8 +314,9 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
 
             {/* Fecha */}
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
+              <label htmlFor="traspaso-fecha" className="block text-xs font-medium text-slate-400 mb-1">Fecha</label>
               <input
+                id="traspaso-fecha"
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
@@ -563,9 +419,10 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
             <p className="text-[11px] text-slate-400">
               Pon lo que tienes de verdad hoy. Se crea un ajuste (ingreso o egreso) para cuadrar, sin borrar el historial.
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div role="group" aria-label="Cuenta para ajustar" className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                aria-pressed={ajusteMetodo === "efectivo"}
                 onClick={() => {
                   setAjusteMetodo("efectivo");
                   if (esMesEnCurso) setAjusteMonto(String(actual.totalesEfectivo.saldo));
@@ -580,6 +437,7 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
               </button>
               <button
                 type="button"
+                aria-pressed={ajusteMetodo === "tarjeta"}
                 onClick={() => {
                   setAjusteMetodo("tarjeta");
                   if (esMesEnCurso) setAjusteMonto(String(actual.totalesTarjeta.saldo));
@@ -594,10 +452,11 @@ export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
               </button>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Saldo real</label>
+              <label htmlFor="ajuste-saldo" className="block text-xs font-medium text-slate-400 mb-1">Saldo real</label>
               <div className="relative flex items-center rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-2.5 focus-within:border-amber-400/60">
                 <span className="text-lg font-bold text-slate-400 mr-2">$</span>
                 <input
+                  id="ajuste-saldo"
                   type="text"
                   inputMode="decimal"
                   value={ajusteMonto}

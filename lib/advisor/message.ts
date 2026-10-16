@@ -5,7 +5,13 @@ import { COOLDOWN_MENSAJE_MS, MAX_CARACTERES_MENSAJE, MAX_ITERACIONES_TOOL, MAX_
 import { obtenerTendenciaMensual } from "./trend";
 import { construirSystemPrompt } from "./prompt";
 import { llamarOpenAI, type MensajeOpenAI } from "./openai";
-import { ejecutarGuardarNotaMemoria, ejecutarRegistrarMovimiento } from "./tools";
+import {
+  ejecutarConsultarMovimientos,
+  ejecutarEditarMovimiento,
+  ejecutarEliminarMovimiento,
+  ejecutarGuardarNotaMemoria,
+  ejecutarRegistrarMovimiento,
+} from "./tools";
 import { textoDeError } from "./utils";
 import type { ResultadoMensajeAsesor } from "./types";
 import type { MensajeAsesor } from "@/lib/types";
@@ -96,10 +102,10 @@ async function enviarMensajeAsesorInterno(
   const { balance, presupuestos, gastosRecurrentes, categorias, clientes, meta } =
     await obtenerDatosDashboard(anio, mes);
   const [tendencia, resNotas, resHistorial] = await Promise.all([
-      obtenerTendenciaMensual(supabase, anio, mes),
-      supabase.from("notas_memoria_asesor").select("contenido").order("creado_en", { ascending: false }).limit(MAX_NOTAS_MEMORIA),
-      supabase.from("mensajes_asesor").select("rol, contenido").order("creado_en", { ascending: false }).limit(MENSAJES_CONTEXTO_MODELO),
-    ]);
+    obtenerTendenciaMensual(supabase, anio, mes),
+    supabase.from("notas_memoria_asesor").select("contenido").order("creado_en", { ascending: false }).limit(MAX_NOTAS_MEMORIA),
+    supabase.from("mensajes_asesor").select("rol, contenido").order("creado_en", { ascending: false }).limit(MENSAJES_CONTEXTO_MODELO),
+  ]);
 
   if (resNotas.error) return { ok: false, error: `No se pudo cargar la memoria del asesor: ${resNotas.error.message}` };
   if (resHistorial.error) return { ok: false, error: `No se pudo cargar el historial: ${resHistorial.error.message}` };
@@ -132,6 +138,7 @@ async function enviarMensajeAsesorInterno(
   let mensajeFinal: MensajeOpenAI | null = null;
   let tokensEntrada = 0;
   let tokensSalida = 0;
+  let datosModificados = false;
 
   try {
     for (let intento = 0; intento < MAX_ITERACIONES_TOOL; intento++) {
@@ -151,12 +158,30 @@ async function enviarMensajeAsesorInterno(
       mensajesConversacion = [...mensajesConversacion, mensaje];
 
       for (const llamada of mensaje.tool_calls) {
-        const textoResultado =
-          llamada.function.name === "guardar_nota_memoria"
-            ? await ejecutarGuardarNotaMemoria(supabase, user.id, llamada.function.arguments)
-            : llamada.function.name === "registrar_movimiento"
-              ? await ejecutarRegistrarMovimiento(llamada.function.arguments)
-              : "Error: herramienta desconocida.";
+        const nombreTool = llamada.function.name;
+        const args = llamada.function.arguments;
+        let textoResultado: string;
+
+        if (nombreTool === "guardar_nota_memoria") {
+          textoResultado = await ejecutarGuardarNotaMemoria(supabase, user.id, args);
+        } else if (nombreTool === "registrar_movimiento") {
+          const res = await ejecutarRegistrarMovimiento(args);
+          textoResultado = res.texto;
+          if (res.modificado) datosModificados = true;
+        } else if (nombreTool === "consultar_movimientos") {
+          textoResultado = await ejecutarConsultarMovimientos(supabase, user.id, args);
+        } else if (nombreTool === "editar_movimiento") {
+          const res = await ejecutarEditarMovimiento(supabase, user.id, args);
+          textoResultado = res.texto;
+          if (res.modificado) datosModificados = true;
+        } else if (nombreTool === "eliminar_movimiento") {
+          const res = await ejecutarEliminarMovimiento(supabase, user.id, args);
+          textoResultado = res.texto;
+          if (res.modificado) datosModificados = true;
+        } else {
+          textoResultado = "Error: herramienta desconocida.";
+        }
+
         mensajesConversacion = [
           ...mensajesConversacion,
           { role: "tool", tool_call_id: llamada.id, content: textoResultado },
@@ -197,6 +222,7 @@ async function enviarMensajeAsesorInterno(
     // llamada a la API, no tiene sentido perderla por un fallo de guardado.
     return {
       ok: true,
+      datosModificados,
       mensajeAsistente: {
         id: `temp-${Date.now()}`,
         rol: "asistente",
@@ -206,5 +232,5 @@ async function enviarMensajeAsesorInterno(
     };
   }
 
-  return { ok: true, mensajeAsistente: mensajeGuardado as MensajeAsesor };
+  return { ok: true, datosModificados, mensajeAsistente: mensajeGuardado as MensajeAsesor };
 }

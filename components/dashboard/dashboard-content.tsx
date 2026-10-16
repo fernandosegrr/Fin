@@ -106,7 +106,7 @@ export function DashboardContent({ tabActiva, asesorVisitado, data, registrarGas
             el historial cada vez que se cambia de pestaña. */}
         {asesorVisitado && (
           <div className={tabActiva === "asesor" ? "space-y-4 animate-in fade-in duration-300" : "hidden"}>
-            <AsesorChat anio={balance.actual.anio} mes={balance.actual.mes} />
+            <AsesorChat anio={balance.actual.anio} mes={balance.actual.mes} onDatosCambiados={recargarDatos} />
           </div>
         )}
       </div>

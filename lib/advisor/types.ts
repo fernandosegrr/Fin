@@ -6,7 +6,7 @@ export type ResultadoHistorialAsesor =
   | { ok: false; error: string };
 
 export type ResultadoMensajeAsesor =
-  | { ok: true; mensajeAsistente: MensajeAsesor }
+  | { ok: true; mensajeAsistente: MensajeAsesor; datosModificados?: boolean }
   | { ok: false; error: string };
 
 export type ResultadoBorrarHistorialAsesor = { ok: true } | { ok: false; error: string };

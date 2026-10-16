@@ -54,7 +54,7 @@ const HERRAMIENTA_REGISTRAR_MOVIMIENTO = {
         monto: { type: "number", description: "Monto en pesos mexicanos, mayor a 0." },
         categoria: { type: "string", description: "Nombre exacto (o muy cercano) de una categoría existente." },
         metodo_pago: { type: "string", enum: ["efectivo", "tarjeta"] },
-        descripcion: { type: "string", description: "Detalle corto, opcional (ej. Pollo feliz)." },
+        descripcion: { type: "string", description: "Detalle corto del gasto o compra (ej. Pollo feliz, Uber centro)." },
         fecha: { type: "string", description: "YYYY-MM-DD. Si se omite, se usa hoy en México." },
         cliente: {
           type: "string",
@@ -65,6 +65,80 @@ const HERRAMIENTA_REGISTRAR_MOVIMIENTO = {
     },
   },
 };
+
+const HERRAMIENTA_CONSULTAR_MOVIMIENTOS = {
+  type: "function" as const,
+  function: {
+    name: "consultar_movimientos",
+    description:
+      "Busca y filtra el detalle de compras, gastos e ingresos en toda la base de datos del usuario (cualquier mes, rango de fechas, comercio/descripción, categoría o método de pago). Devuelve cada movimiento con su fecha, monto, categoría, método, descripción, cliente e ID, además de la suma total.",
+    parameters: {
+      type: "object",
+      properties: {
+        busqueda: {
+          type: "string",
+          description: "Texto a buscar en la descripción/concepto, categoría o cliente (ej. 'pollo', 'uber', 'super').",
+        },
+        tipo: { type: "string", enum: ["todos", "ingreso", "egreso"] },
+        metodo_pago: { type: "string", enum: ["todos", "efectivo", "tarjeta"] },
+        categoria: { type: "string", description: "Filtrar por nombre de categoría." },
+        fecha_inicio: { type: "string", description: "Fecha inicial YYYY-MM-DD (inclusive)." },
+        fecha_fin: { type: "string", description: "Fecha final YYYY-MM-DD (inclusive)." },
+        orden: {
+          type: "string",
+          enum: ["recientes", "mayor_monto"],
+          description: "Ordenar por más recientes (default) o de mayor a menor monto.",
+        },
+        limite: { type: "number", description: "Máximo de movimientos a devolver (1 a 50, por defecto 25)." },
+      },
+    },
+  },
+};
+
+const HERRAMIENTA_EDITAR_MOVIMIENTO = {
+  type: "function" as const,
+  function: {
+    name: "editar_movimiento",
+    description:
+      "Modifica un movimiento (compra, gasto o ingreso) existente usando su id. Solo envía los campos que el usuario pidió cambiar; los demás se conservan.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID del movimiento a editar (aparece como id:... en el detalle)." },
+        monto: { type: "number", description: "Nuevo monto en pesos mexicanos, mayor a 0." },
+        categoria: { type: "string", description: "Nuevo nombre de categoría existente." },
+        metodo_pago: { type: "string", enum: ["efectivo", "tarjeta"] },
+        descripcion: { type: "string", description: "Nueva descripción o detalle de la compra." },
+        fecha: { type: "string", description: "Nueva fecha YYYY-MM-DD." },
+      },
+      required: ["id"],
+    },
+  },
+};
+
+const HERRAMIENTA_ELIMINAR_MOVIMIENTO = {
+  type: "function" as const,
+  function: {
+    name: "eliminar_movimiento",
+    description:
+      "Elimina un movimiento (compra, gasto o ingreso) existente usando su id cuando el usuario pida borrarlo o quitarlo.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ID del movimiento a eliminar (aparece como id:... en el detalle)." },
+      },
+      required: ["id"],
+    },
+  },
+};
+
+const HERRAMIENTAS_ASESOR = [
+  HERRAMIENTA_GUARDAR_NOTA,
+  HERRAMIENTA_REGISTRAR_MOVIMIENTO,
+  HERRAMIENTA_CONSULTAR_MOVIMIENTOS,
+  HERRAMIENTA_EDITAR_MOVIMIENTO,
+  HERRAMIENTA_ELIMINAR_MOVIMIENTO,
+];
 
 export async function llamarOpenAI(
   mensajes: MensajeOpenAI[],
@@ -88,7 +162,7 @@ export async function llamarOpenAI(
         // En la última iteración permitida se llama SIN herramientas: así el
         // modelo se ve obligado a cerrar con texto en vez de pedir otra tool
         // call que ya no se va a ejecutar (eso dejaba la respuesta vacía).
-        ...(conHerramientas ? { tools: [HERRAMIENTA_GUARDAR_NOTA, HERRAMIENTA_REGISTRAR_MOVIMIENTO] } : {}),
+        ...(conHerramientas ? { tools: HERRAMIENTAS_ASESOR } : {}),
         messages: mensajes,
       }),
       signal: AbortSignal.timeout(TIMEOUT_OPENAI_MS),

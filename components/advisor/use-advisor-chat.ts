@@ -9,7 +9,7 @@ import type { MensajeAsesor } from "@/lib/types";
 type MensajeUI = MensajeAsesor & { esError?: boolean };
 export const MAX_CARACTERES = 4000;
 
-export function useAdvisorChat(anio: number, mes: number) {
+export function useAdvisorChat(anio: number, mes: number, onDatosCambiados?: () => void) {
   const [mensajes, setMensajes] = useState<MensajeUI[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -92,6 +92,9 @@ export function useAdvisorChat(anio: number, mes: number) {
       .then((resultado) => {
         if (resultado.ok) {
           setMensajes((prev) => [...prev, resultado.mensajeAsistente]);
+          if (resultado.datosModificados) {
+            onDatosCambiados?.();
+          }
         } else {
           agregarError(resultado.error);
         }

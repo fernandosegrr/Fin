@@ -3,26 +3,29 @@
 import { Bot, Eraser, Loader2, Send, Sparkles } from "lucide-react";
 import { nombreDelMes } from "@/lib/dates";
 import { GlowButton } from "@/components/react-bits/GlowButton";
+import { AdvisorMarkdown } from "./advisor/advisor-markdown";
 import { MAX_CARACTERES, useAdvisorChat } from "./advisor/use-advisor-chat";
 
 interface Props {
   /** Mes que el usuario tiene abierto en el dashboard: el asesor razona sobre ESE mes, no sobre el de hoy. */
   anio: number;
   mes: number;
+  onDatosCambiados?: () => void;
 }
 
 const SUGERENCIAS = [
-  "¿Cómo voy este mes?",
-  "¿En qué categoría gasto más?",
+  "Desglosa mis compras más caras del mes en una tabla",
+  "¿En qué comercios o conceptos he gastado más?",
+  "¿Cómo va mi balance y mis compras con tarjeta vs efectivo?",
   "Anota $50 de pollo en efectivo",
 ];
 
-export function AsesorChat({ anio, mes }: Props) {
+export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
   const {
     mensajes, cargando, errorCarga, texto, setTexto, enviando, borrando, finRef, textareaRef,
     enviarMensaje, ajustarAlturaTextarea, manejarSubmit, manejarTeclaTextarea,
     borrarConversacion, nombreMes, cercaDelLimite, reintentarCarga,
-  } = useAdvisorChat(anio, mes);
+  } = useAdvisorChat(anio, mes, onDatosCambiados);
 
   return (
     <div className="rounded-3xl border border-[#DCE4DB] bg-white shadow-2xl shadow-black/5 overflow-hidden flex flex-col backdrop-blur-2xl">
@@ -31,11 +34,16 @@ export function AsesorChat({ anio, mes }: Props) {
           <Bot className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm sm:text-base font-black text-[#1C3028] flex items-center gap-1.5">
-            Asesor Financiero IA <span className="font-semibold text-[#7A897D] text-xs">· {nombreMes}</span>
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm sm:text-base font-black text-[#1C3028] flex items-center gap-1.5">
+              Asesor Financiero IA <span className="font-semibold text-[#7A897D] text-xs">· {nombreMes}</span>
+            </h2>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold text-[#286F50]">
+              GPT-6 Luna
+            </span>
+          </div>
           <p className="text-[11px] text-[#5E7165]">
-            Análisis inteligente y registro rápido basado en tus movimientos reales.
+            Acceso al detalle de cada compra, tablas comparativas, búsqueda histórica y registro inteligente.
           </p>
         </div>
         {mensajes.length > 0 && (
@@ -52,7 +60,7 @@ export function AsesorChat({ anio, mes }: Props) {
         )}
       </div>
 
-      <div className="px-4 sm:px-8 py-6 space-y-4 overflow-y-auto min-h-72 max-h-[55dvh]">
+      <div className="px-4 sm:px-8 py-6 space-y-4 overflow-y-auto min-h-72 max-h-[60dvh]">
         {cargando && (
           <div className="space-y-3">
             <div className="h-14 w-2/3 rounded-2xl bg-[#E8EEE7] animate-pulse border border-[#DCE4DB]" />
@@ -79,12 +87,12 @@ export function AsesorChat({ anio, mes }: Props) {
               <Sparkles className="h-7 w-7" />
             </div>
             <h3 className="text-xl sm:text-2xl font-black tracking-tight text-[#1C3028] mb-2">
-              Dale claridad a tus números
+              Conoce cada detalle de tus compras
             </h3>
-            <p className="text-xs text-[#5E7165] max-w-sm mx-auto mb-5 leading-relaxed">
-              Pregúntame sobre tus gastos, balance proyectado o pide que anote un gasto rápido para {nombreDelMes(anio, mes)}.
+            <p className="text-xs text-[#5E7165] max-w-md mx-auto mb-5 leading-relaxed">
+              Pregúntame qué compraste cualquier día, pídeme tablas comparativas, busca gastos en otros meses o anota y corrige movimientos de {nombreDelMes(anio, mes)}.
             </p>
-            <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+            <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
               {SUGERENCIAS.map((s) => (
                 <button
                   key={s}
@@ -104,7 +112,7 @@ export function AsesorChat({ anio, mes }: Props) {
           mensajes.map((m) => (
             <div key={m.id} className={`flex ${m.rol === "usuario" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${
+                className={`max-w-[90%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${
                   m.rol === "usuario"
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium shadow-md shadow-emerald-900/30"
                     : m.esError
@@ -112,7 +120,11 @@ export function AsesorChat({ anio, mes }: Props) {
                       : "bg-[#F7F9F5] border border-[#DCE4DB] text-[#263D33] shadow-sm"
                 }`}
               >
-                <span className="whitespace-pre-wrap">{m.contenido}</span>
+                {m.rol === "usuario" || m.esError ? (
+                  <span className="whitespace-pre-wrap">{m.contenido}</span>
+                ) : (
+                  <AdvisorMarkdown content={m.contenido} />
+                )}
               </div>
             </div>
           ))}
@@ -121,7 +133,7 @@ export function AsesorChat({ anio, mes }: Props) {
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm bg-[#F7F9F5] border border-[#DCE4DB] text-[#5E7165]">
               <span className="flex items-center gap-2 font-medium">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#286F50]" /> El asesor está razonando tus datos...
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#286F50]" /> Analizando tus compras y movimientos con GPT-6 Luna...
               </span>
             </div>
           </div>
@@ -140,7 +152,7 @@ export function AsesorChat({ anio, mes }: Props) {
               requestAnimationFrame(ajustarAlturaTextarea);
             }}
             onKeyDown={manejarTeclaTextarea}
-            placeholder="Pregunta algo o anota un movimiento..."
+            placeholder="Pregunta por una compra, pide una tabla o registra un gasto..."
             rows={1}
             maxLength={MAX_CARACTERES}
             readOnly={enviando || cargando || Boolean(errorCarga)}

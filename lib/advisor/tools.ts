@@ -9,9 +9,13 @@ import { MAX_NOTAS_MEMORIA } from "./config";
 import { sanitizarDato } from "./utils";
 import type { SupabaseServerClient } from "./types";
 import type { Categoria, MetodoPago, TransaccionConCategoria } from "@/lib/types";
+import { obtenerCuentas } from "@/lib/dashboard/accounts";
+import { resolverCuenta } from "./finance-tools";
+import { NATURALEZAS, type NaturalezaMovimiento } from "@/lib/finance/types";
 
 function resolverCategoriaPorNombre(categorias: Categoria[], nombreBuscado: string, tipo?: "ingreso" | "egreso" | null) {
-  const candidatas = tipo ? categorias.filter((c) => c.tipo === tipo) : categorias;
+  const disponibles = categorias.filter(c => !c.archivada);
+  const candidatas = tipo ? disponibles.filter((c) => c.tipo === tipo) : disponibles;
   const norm = nombreBuscado.toLocaleLowerCase("es-MX");
   const exacta = candidatas.find((c) => c.nombre.toLocaleLowerCase("es-MX") === norm);
   const parciales = candidatas.filter(
@@ -80,7 +84,7 @@ export async function ejecutarGuardarNotaMemoria(
   return "Nota guardada correctamente.";
 }
 
-export async function ejecutarRegistrarMovimiento(argumentosCrudos: string): Promise<{ texto: string; modificado: boolean }> {
+export async function ejecutarRegistrarMovimiento(argumentosCrudos: string, claveSolicitud?: string): Promise<{ texto: string; modificado: boolean }> {
   let parsed: {
     tipo?: unknown;
     monto?: unknown;
@@ -89,6 +93,10 @@ export async function ejecutarRegistrarMovimiento(argumentosCrudos: string): Pro
     descripcion?: unknown;
     fecha?: unknown;
     cliente?: unknown;
+    prestamo_id?: unknown;
+    cuenta?: unknown;
+    naturaleza?: unknown;
+    etiquetas?: unknown;
   };
   try {
     parsed = JSON.parse(argumentosCrudos) as typeof parsed;
@@ -134,6 +142,8 @@ export async function ejecutarRegistrarMovimiento(argumentosCrudos: string): Pro
   }
 
   try {
+    const cuenta = typeof parsed.cuenta === "string" ? resolverCuenta(await obtenerCuentas(), parsed.cuenta) : null;
+    if (parsed.naturaleza && !(NATURALEZAS as readonly unknown[]).includes(parsed.naturaleza)) throw new Error("El tipo de movimiento no es válido.");
     await crearTransaccion({
       categoria_id: categoria.id,
       monto,
@@ -141,6 +151,11 @@ export async function ejecutarRegistrarMovimiento(argumentosCrudos: string): Pro
       metodo_pago: metodo,
       fecha: fecha || undefined,
       cliente_id: clienteId,
+      clave_solicitud: claveSolicitud,
+      ...(typeof parsed.prestamo_id === "string" ? { movimiento_relacionado_id: parsed.prestamo_id } : {}),
+      ...(cuenta ? { cuenta_id: cuenta.id } : {}),
+      ...(parsed.naturaleza ? { naturaleza: parsed.naturaleza as NaturalezaMovimiento } : {}),
+      ...(Array.isArray(parsed.etiquetas) ? { etiquetas: parsed.etiquetas.filter((x): x is string => typeof x === "string") } : {}),
     });
   } catch (err) {
     return { texto: `Error al guardar: ${err instanceof Error ? err.message : "falló el registro"}`, modificado: false };
@@ -283,6 +298,11 @@ export async function ejecutarEditarMovimiento(
     metodo_pago?: unknown;
     descripcion?: unknown;
     fecha?: unknown;
+    cuenta?: unknown;
+    naturaleza?: unknown;
+    etiquetas?: unknown;
+    requiere_revision?: unknown;
+    motivo_revision?: unknown;
   };
   try {
     parsed = JSON.parse(argumentosCrudos) as typeof parsed;
@@ -295,9 +315,10 @@ export async function ejecutarEditarMovimiento(
 
   const { data: actual, error: errorLectura } = await supabase
     .from("transacciones")
-    .select("id, categoria_id, monto, descripcion, metodo_pago, fecha, cliente_id")
+    .select("*")
     .eq("id", id)
     .eq("user_id", userId)
+    .is("eliminado_en", null)
     .maybeSingle();
 
   if (errorLectura || !actual) {
@@ -350,6 +371,10 @@ export async function ejecutarEditarMovimiento(
   }
 
   try {
+    if (parsed.naturaleza && !(NATURALEZAS as readonly unknown[]).includes(parsed.naturaleza)) throw new Error("El tipo de movimiento no es válido.");
+    const cuentas = await obtenerCuentas();
+    const cuenta = typeof parsed.cuenta === "string" ? resolverCuenta(cuentas, parsed.cuenta) : nuevoMetodo !== actual.metodo_pago ? cuentas.find(c => c.codigo === (nuevoMetodo === "efectivo" ? "efectivo" : "principal")) : null;
+    if (nuevoMonto !== Number(actual.monto) && actual.naturaleza === "rendimiento" && actual.interes_bruto != null) throw new Error("Este rendimiento tiene bruto y retención. Edita el desglose desde Cuentas para conservar ambos importes.");
     await actualizarTransaccion(id, {
       categoria_id: nuevaCategoriaId,
       monto: nuevoMonto,
@@ -357,6 +382,10 @@ export async function ejecutarEditarMovimiento(
       metodo_pago: nuevoMetodo,
       fecha: nuevaFecha,
       cliente_id: (actual.cliente_id as string | null) ?? null,
+      ...(cuenta ? { cuenta_id: cuenta.id } : {}),
+      ...(parsed.naturaleza ? { naturaleza: parsed.naturaleza as NaturalezaMovimiento } : {}),
+      ...(Array.isArray(parsed.etiquetas) ? { etiquetas: parsed.etiquetas.filter((x): x is string => typeof x === "string") } : {}),
+      ...(typeof parsed.requiere_revision === "boolean" ? { requiere_revision: parsed.requiere_revision, motivo_revision: typeof parsed.motivo_revision === "string" ? parsed.motivo_revision : null } : {}),
     });
   } catch (err) {
     return {

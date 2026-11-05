@@ -6,7 +6,6 @@ import { obtenerTendenciaMensual } from "./trend";
 import { construirSystemPrompt } from "./prompt";
 import { llamarOpenAI, type MensajeOpenAI } from "./openai";
 import {
-  ejecutarConsultarMovimientos,
   ejecutarEditarMovimiento,
   ejecutarEliminarMovimiento,
   ejecutarGuardarNotaMemoria,
@@ -15,27 +14,53 @@ import {
 import { textoDeError } from "./utils";
 import type { ResultadoMensajeAsesor } from "./types";
 import type { MensajeAsesor } from "@/lib/types";
+import { consultarMovimientosFinancieros, ejecutarHerramientaFinanciera, TOOLS_FINANCIERAS_MUTANTES } from "./finance-tools";
+import { claveAccion, guardarAcciones, iniciarSolicitud, resumenAcciones, type AccionAsesor } from "./requests";
 
 export async function enviarMensajeAsesor(
   contenidoCrudo: string,
   anioVista?: number,
   mesVista?: number,
+  solicitudId?: string,
 ): Promise<ResultadoMensajeAsesor> {
+  return ejecutarMensaje(contenidoCrudo, anioVista, mesVista, solicitudId || crypto.randomUUID());
+}
+
+export async function enviarMensajeAsesorConProgreso(contenido: string, anio: number, mes: number, solicitudId: string, progreso: (estado: string) => void) {
+  return ejecutarMensaje(contenido, anio, mes, solicitudId, progreso);
+}
+
+async function ejecutarMensaje(contenidoCrudo: string, anioVista: number | undefined, mesVista: number | undefined, solicitudId: string, progreso?: (estado: string) => void): Promise<ResultadoMensajeAsesor> {
+  const ejecucion = { propia: false };
+  let resultado: ResultadoMensajeAsesor;
   try {
-    return await enviarMensajeAsesorInterno(contenidoCrudo, anioVista, mesVista);
+    resultado = await enviarMensajeAsesorInterno(contenidoCrudo, anioVista, mesVista, solicitudId, ejecucion, progreso);
   } catch (err) {
     // Última red de seguridad: nada debe salir de aquí como excepción, o
     // Next.js lo redacta en producción y el usuario pierde el detalle real
     // (ver el comentario de ResultadoMensajeAsesor arriba).
     console.error("Error en enviarMensajeAsesor:", err);
-    return { ok: false, error: textoDeError(err, "No se pudo obtener respuesta del asesor.") };
+    resultado = { ok: false, error: textoDeError(err, "No se pudo obtener respuesta del asesor.") };
   }
+  if (!resultado.ok && ejecucion.propia) {
+    try {
+      const db = await createClient();
+      const r = await db.from("solicitudes_asesor").select("acciones").eq("id", solicitudId).maybeSingle();
+      const acciones = (r.data?.acciones || []) as AccionAsesor[];
+      if (acciones.some(a => a.estado !== "fallida")) resultado = { ...resultado, datosModificados: true, error: `${resultado.error}\n\n${resumenAcciones(acciones)}\n\nRevisa los movimientos actualizados antes de repetir una acción.` };
+      await db.from("solicitudes_asesor").update({ estado: "error", actualizado_en: new Date().toISOString() }).eq("id", solicitudId);
+    } catch { /* La solicitud persiste; un reintento no reejecuta un proceso pendiente. */ }
+  }
+  return resultado;
 }
 
 async function enviarMensajeAsesorInterno(
   contenidoCrudo: string,
   anioVista?: number,
   mesVista?: number,
+  solicitudId = crypto.randomUUID(),
+  ejecucion = { propia: false },
+  progreso?: (estado: string) => void,
 ): Promise<ResultadoMensajeAsesor> {
   const contenido = contenidoCrudo.trim();
   if (!contenido) return { ok: false, error: "Escribe un mensaje antes de enviar." };
@@ -51,6 +76,10 @@ async function enviarMensajeAsesorInterno(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Tu sesión expiró. Vuelve a iniciar sesión." };
+  const solicitud = await iniciarSolicitud(supabase, user.id, solicitudId, contenido);
+  if (!solicitud.continuar) return solicitud.resultado;
+  ejecucion.propia = true;
+  progreso?.("Consultando tus saldos, movimientos y compromisos…");
 
   const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const [{ data: ultimoMensaje }, { count: mensajesHora, error: errorCuenta }] = await Promise.all([
@@ -76,7 +105,7 @@ async function enviarMensajeAsesorInterno(
       error: `Llegaste al límite de ${MAX_MENSAJES_POR_HORA} mensajes por hora. Intenta más tarde.`,
     };
   }
-  if (ultimoMensaje?.creado_en) {
+  if (!solicitud.reintento && ultimoMensaje?.creado_en) {
     const transcurrido = Date.now() - new Date(ultimoMensaje.creado_en as string).getTime();
     if (transcurrido >= 0 && transcurrido < COOLDOWN_MENSAJE_MS) {
       return { ok: false, error: "Espera un momento antes de enviar otro mensaje." };
@@ -95,8 +124,8 @@ async function enviarMensajeAsesorInterno(
   // mensaje del usuario no se pierde.
   const { error: errorInsertUsuario } = await supabase
     .from("mensajes_asesor")
-    .insert({ user_id: user.id, rol: "usuario", contenido });
-  if (errorInsertUsuario) return { ok: false, error: `No se pudo guardar tu mensaje: ${errorInsertUsuario.message}` };
+    .insert({ user_id: user.id, rol: "usuario", contenido, solicitud_id: solicitudId });
+  if (errorInsertUsuario && errorInsertUsuario.code !== "23505") return { ok: false, error: `No se pudo guardar tu mensaje: ${errorInsertUsuario.message}` };
 
   // El dashboard ya limita la concurrencia y reintenta lecturas temporales.
   const { balance, presupuestos, gastosRecurrentes, categorias, clientes, meta } =
@@ -139,10 +168,12 @@ async function enviarMensajeAsesorInterno(
   let tokensEntrada = 0;
   let tokensSalida = 0;
   let datosModificados = false;
+  const acciones: AccionAsesor[] = [];
 
   try {
     for (let intento = 0; intento < MAX_ITERACIONES_TOOL; intento++) {
       const esUltimaIteracion = intento === MAX_ITERACIONES_TOOL - 1;
+      progreso?.(datosModificados ? "Comprobando los cambios y preparando la respuesta…" : "Analizando tus datos…");
       const response = await llamarOpenAI(mensajesConversacion, { conHerramientas: !esUltimaIteracion });
 
       if (response.usage) {
@@ -161,15 +192,24 @@ async function enviarMensajeAsesorInterno(
         const nombreTool = llamada.function.name;
         const args = llamada.function.arguments;
         let textoResultado: string;
+        const mutante = ["registrar_movimiento", "editar_movimiento", "eliminar_movimiento", ...TOOLS_FINANCIERAS_MUTANTES].includes(nombreTool);
+        const clave = await claveAccion(solicitudId, nombreTool, args);
+        const repetida = acciones.find(a => a.clave === clave);
+        if (repetida) {
+          mensajesConversacion.push({ role: "tool", tool_call_id: llamada.id, content: repetida.resultado || "La acción ya fue iniciada; consulta su resultado, no la repitas." });
+          continue;
+        }
+        if (mutante) { acciones.push({ clave, herramienta: nombreTool, estado: "iniciada" }); await guardarAcciones(supabase, solicitudId, acciones); }
+        progreso?.(mutante ? "Guardando la acción solicitada…" : "Consultando el detalle completo…");
 
         if (nombreTool === "guardar_nota_memoria") {
           textoResultado = await ejecutarGuardarNotaMemoria(supabase, user.id, args);
         } else if (nombreTool === "registrar_movimiento") {
-          const res = await ejecutarRegistrarMovimiento(args);
+          const res = await ejecutarRegistrarMovimiento(args, clave);
           textoResultado = res.texto;
           if (res.modificado) datosModificados = true;
         } else if (nombreTool === "consultar_movimientos") {
-          textoResultado = await ejecutarConsultarMovimientos(supabase, user.id, args);
+          textoResultado = await consultarMovimientosFinancieros(args);
         } else if (nombreTool === "editar_movimiento") {
           const res = await ejecutarEditarMovimiento(supabase, user.id, args);
           textoResultado = res.texto;
@@ -179,7 +219,15 @@ async function enviarMensajeAsesorInterno(
           textoResultado = res.texto;
           if (res.modificado) datosModificados = true;
         } else {
-          textoResultado = "Error: herramienta desconocida.";
+          const res = await ejecutarHerramientaFinanciera(nombreTool, args, supabase, user.id, clave, anio, mes);
+          textoResultado = res.texto;
+          if (res.modificado) datosModificados = true;
+        }
+        if (mutante) {
+          const accion = acciones[acciones.length - 1];
+          accion.estado = /^Error[: ]/i.test(textoResultado) ? "fallida" : "realizada";
+          accion.resultado = textoResultado;
+          await guardarAcciones(supabase, solicitudId, acciones);
         }
 
         mensajesConversacion = [
@@ -192,7 +240,9 @@ async function enviarMensajeAsesorInterno(
     console.error("Error llamando a la API de OpenAI:", err);
     // llamarOpenAI() ya normaliza todo a un mensaje en español; se devuelve
     // como dato (no se lanza) para que llegue íntegro al cliente en prod.
-    return { ok: false, error: textoDeError(err, "No se pudo conectar con el asesor.") };
+    if (acciones.some(a => a.estado === "realizada") && !acciones.some(a => a.estado === "iniciada")) {
+      mensajeFinal = { role: "assistant", content: `Se completaron estas acciones:\n\n${resumenAcciones(acciones)}\n\nLa explicación del asistente no pudo terminar, pero los cambios guardados ya están disponibles.` };
+    } else return { ok: false, datosModificados, error: textoDeError(err, "No se pudo conectar con el asesor.") };
   }
 
   // No basta con `?? fallback`: un modelo de razonamiento sin presupuesto
@@ -212,9 +262,11 @@ async function enviarMensajeAsesorInterno(
       contenido: textoRespuesta,
       tokens_entrada: tokensEntrada,
       tokens_salida: tokensSalida,
+      solicitud_id: solicitudId,
     })
     .select("id, rol, contenido, creado_en")
     .single();
+  await supabase.from("solicitudes_asesor").update({ estado: "completado", respuesta: textoRespuesta, mensaje_id: mensajeGuardado?.id || null, actualizado_en: new Date().toISOString() }).eq("id", solicitudId);
 
   if (errorInsertAsistente) {
     console.error("No se pudo guardar la respuesta del asesor:", errorInsertAsistente);

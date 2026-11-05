@@ -4,6 +4,7 @@ import { X, Plus, Trash2, Tag, Layers } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import type { Categoria } from "@/lib/types";
 import { useCategoryManager } from "./categories/use-category-manager";
+import { FinanceCategoryManager } from "./finance/category-manager";
 
 interface Props {
   abierto: boolean;
@@ -15,6 +16,10 @@ interface Props {
 }
 
 export function CategoryManagerModal(props: Props) {
+  return props.abierto ? <FinanceCategoryManager categorias={props.categorias} onCerrar={props.onCerrar} onCambio={props.onCambio} onCategoriaCreada={props.onCategoriaCreada} /> : null;
+}
+
+export function LegacyCategoryManagerModal(props: Props) {
   const { abierto, onCerrar, categorias } = props;
   const {
     nombre, setNombre, tipo, setTipo, grupo, setGrupo, categoriaAEliminar, setCategoriaAEliminar,

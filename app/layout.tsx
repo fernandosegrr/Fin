@@ -33,6 +33,7 @@ export const viewport: Viewport = {
   // rompe WCAG 1.4.4 (Resize Text) y afecta a quien necesita agrandar texto.
   maximumScale: 5,
   viewportFit: "cover",
+  interactiveWidget: "resizes-content",
   themeColor: "#f4f6f0",
 };
 

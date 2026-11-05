@@ -48,19 +48,24 @@ model Categoria {
   presupuestos      Presupuesto[]
   gastosRecurrentes GastoRecurrente[]
 
+  familia    String?
+  archivada  Boolean  @default(false)
+  aliases    String[] @default([])
+  naturaleza String?
+
   @@index([userId, tipo])
   @@map("categorias")
 }
 
 model Transaccion {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  categoriaId String   @map("categoria_id") @db.Uuid
-  monto       Decimal  @db.Decimal
-  fecha       DateTime @default(now()) @db.Date
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  categoriaId       String   @map("categoria_id") @db.Uuid
+  monto             Decimal  @db.Decimal
+  fecha             DateTime @default(now()) @db.Date
   /// Valores válidos: 'tarjeta' | 'efectivo' (CHECK constraint en la BD, no modelado aquí).
-  metodoPago  String   @default("tarjeta") @map("metodo_pago")
-  descripcion String?
+  metodoPago        String   @default("tarjeta") @map("metodo_pago")
+  descripcion       String?
   /// Suscripción/gasto recurrente que originó esta transacción, si aplica.
   gastoRecurrenteId String?  @map("gasto_recurrente_id") @db.Uuid
   /// Cliente/proyecto al que se asocia un ingreso (opcional).
@@ -70,6 +75,20 @@ model Transaccion {
   categoria       Categoria        @relation(fields: [categoriaId], references: [id])
   gastoRecurrente GastoRecurrente? @relation(fields: [gastoRecurrenteId], references: [id])
   cliente         Cliente?         @relation(fields: [clienteId], references: [id])
+
+  naturaleza              String?
+  cuentaId                String?   @map("cuenta_id") @db.Uuid
+  cuentaDestinoId         String?   @map("cuenta_destino_id") @db.Uuid
+  etiquetas               String[]  @default([])
+  requiereRevision        Boolean   @default(false) @map("requiere_revision")
+  motivoRevision          String?   @map("motivo_revision")
+  interesBruto            Decimal?  @map("interes_bruto") @db.Decimal
+  impuestoRetenido        Decimal?  @map("impuesto_retenido") @db.Decimal
+  deudaLiquidadaEn        DateTime? @map("deuda_liquidada_en") @db.Date
+  movimientoRelacionadoId String?   @map("movimiento_relacionado_id") @db.Uuid
+  eliminadoEn             DateTime? @map("eliminado_en") @db.Timestamptz
+  claveSolicitud          String?   @map("clave_solicitud") @db.Uuid
+  actualizadoEn           DateTime  @default(now()) @map("actualizado_en") @db.Timestamptz
 
   @@index([userId, fecha(sort: Desc)])
   @@index([userId, categoriaId])
@@ -99,6 +118,8 @@ model MetaAhorro {
   montoObjetivo Decimal   @map("monto_objetivo") @db.Decimal
   fechaLimite   DateTime? @map("fecha_limite") @db.Date
   creadoEn      DateTime  @default(now()) @map("creado_en") @db.Timestamptz
+
+  cuentaId String? @map("cuenta_id") @db.Uuid
 
   @@map("metas_ahorro")
 }
@@ -132,14 +153,16 @@ model GastoRecurrente {
   categoria     Categoria?    @relation(fields: [categoriaId], references: [id])
   transacciones Transaccion[]
 
+  archivada Boolean @default(false)
+
   @@index([userId, diaCobro])
   @@map("gastos_recurrentes")
 }
 
 model Transferencia {
-  id     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String  @map("user_id") @db.Uuid
-  monto  Decimal @db.Decimal
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  monto       Decimal  @db.Decimal
   /// Valores válidos: 'tarjeta' | 'efectivo' (CHECK constraint en la BD, no modelado aquí).
   origen      String
   destino     String
@@ -147,21 +170,29 @@ model Transferencia {
   descripcion String?
   creadoEn    DateTime @default(now()) @map("creado_en") @db.Timestamptz
 
+  cuentaOrigenId  String?   @map("cuenta_origen_id") @db.Uuid
+  cuentaDestinoId String?   @map("cuenta_destino_id") @db.Uuid
+  eliminadoEn     DateTime? @map("eliminado_en") @db.Timestamptz
+  claveSolicitud  String?   @map("clave_solicitud") @db.Uuid
+  actualizadoEn   DateTime  @default(now()) @map("actualizado_en") @db.Timestamptz
+
   @@index([userId, fecha(sort: Desc)])
   @@map("transferencias")
 }
 
 model MensajeAsesor {
-  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId String @map("user_id") @db.Uuid
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
   /// Valores válidos: 'usuario' | 'asistente' (CHECK constraint en la BD, no modelado aquí).
-  rol       String
-  contenido String
+  rol           String
+  contenido     String
   /// Tokens de la llamada a OpenAI que generó este mensaje. Solo se llenan
   /// en mensajes de rol 'asistente' — visibilidad de costo, no lógica de negocio.
   tokensEntrada Int?     @map("tokens_entrada")
   tokensSalida  Int?     @map("tokens_salida")
   creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  solicitudId String? @map("solicitud_id") @db.Uuid
 
   @@index([userId, creadoEn])
   @@map("mensajes_asesor")
@@ -180,4 +211,77 @@ model NotaMemoriaAsesor {
 
   @@index([userId, creadoEn])
   @@map("notas_memoria_asesor")
+}
+
+/// Las FKs compuestas de propiedad, RLS e índices parciales se mantienen en SQL.
+model CuentaFinanciera {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  codigo             String
+  nombre             String
+  tipo               String
+  metodoPago         String    @map("metodo_pago")
+  banco              String?
+  excluidaDisponible Boolean   @default(false) @map("excluida_disponible")
+  archivada          Boolean   @default(false)
+  grupoRendimiento   String?   @map("grupo_rendimiento")
+  rendimientoDesde   DateTime? @map("rendimiento_desde") @db.Date
+  tasaAnual          Decimal   @default(0) @map("tasa_anual") @db.Decimal(8, 4)
+  tasaExcedente      Decimal   @default(0) @map("tasa_excedente") @db.Decimal(8, 4)
+  tasaSuperior       Decimal   @default(0) @map("tasa_superior") @db.Decimal(8, 4)
+  retencionAnual     Decimal   @default(0) @map("retencion_anual") @db.Decimal(8, 4)
+  limitePreferente   Decimal   @default(25000) @map("limite_preferente") @db.Decimal
+  limiteSegundoTramo Decimal   @default(1000000) @map("limite_segundo_tramo") @db.Decimal
+  plan               String?
+  creadoEn           DateTime  @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@unique([userId, codigo])
+  @@unique([id, userId])
+  @@map("cuentas_financieras")
+}
+
+model CambioFinanciero {
+  secuencia  BigInt   @id @default(autoincrement())
+  id         String   @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  loteId     String   @map("lote_id") @db.Uuid
+  entidad    String
+  registroId String   @map("registro_id") @db.Uuid
+  antes      Json?
+  despues    Json?
+  creadoEn   DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@map("cambios_financieros")
+}
+
+model LoteFinanciero {
+  id        String   @id @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  nombre    String
+  revertido Boolean  @default(false)
+  creadoEn  DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  @@map("lotes_financieros")
+}
+
+model SolicitudAsesor {
+  id            String   @id @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  contenido     String
+  estado        String   @default("procesando")
+  acciones      Json     @default("[]")
+  respuesta     String?
+  mensajeId     String?  @map("mensaje_id") @db.Uuid
+  creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+  actualizadoEn DateTime @default(now()) @map("actualizado_en") @db.Timestamptz
+
+  @@map("solicitudes_asesor")
+}
+
+model MesPresupuestado {
+  userId String   @map("user_id") @db.Uuid
+  mes    DateTime @db.Date
+
+  @@id([userId, mes])
+  @@map("meses_presupuestados")
 }

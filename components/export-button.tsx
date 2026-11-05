@@ -4,22 +4,24 @@ import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { obtenerTransaccionesCompletasDelMes, obtenerTransferenciasCompletasDelMes } from "@/app/dashboard/actions";
+import type { CuentaFinanciera } from "@/lib/finance/types";
+import { NOMBRES_NATURALEZA } from "@/lib/finance/types";
+import { naturalezaDe } from "@/lib/finance/ledger";
 
 interface Props {
   anio: number;
   mes: number;
   nombreMes: string;
+  cuentas?: CuentaFinanciera[];
 }
 
-export function ExportButton({ anio, mes, nombreMes }: Props) {
+export function ExportButton({ anio, mes, nombreMes, cuentas = [] }: Props) {
   const [exportando, setExportando] = useState(false);
 
   async function exportarExcel() {
     setExportando(true);
     try {
-      // Se piden las transacciones del mes completo (sin el límite de 200
-      // filas que usa la vista principal por rendimiento) para que el archivo
-      // nunca quede incompleto en meses con muchos movimientos.
+      // Exportación completa, independiente de la página visible.
       const [transacciones, transferencias, XLSX] = await Promise.all([
         obtenerTransaccionesCompletasDelMes(anio, mes),
         obtenerTransferenciasCompletasDelMes(anio, mes),
@@ -31,16 +33,21 @@ export function ExportButton({ anio, mes, nombreMes }: Props) {
         return;
       }
 
-      const encabezados = ["Fecha", "Categoría", "Tipo", "Grupo", "Cliente", "Método de Pago", "Descripción", "Monto"];
+      const nombres = new Map(cuentas.map(c => [c.id, c.nombre]));
+      const encabezados = ["ID", "Fecha", "Categoría", "Naturaleza", "Grupo", "Cliente", "Cuenta", "Destino", "Método de pago", "Descripción", "Monto MXN", "Interés bruto", "Retención", "Etiquetas", "Pendiente de revisión", "Motivo"];
       const filas = transacciones.map((t) => [
+        t.id,
         t.fecha,
         t.categoria?.nombre || "Sin categoría",
-        t.categoria?.tipo || "",
+        NOMBRES_NATURALEZA[naturalezaDe(t)],
         t.categoria?.grupo || "",
         t.cliente?.nombre || "",
+        nombres.get(t.cuenta_id || "") || t.metodo_pago || "",
+        nombres.get(t.cuenta_destino_id || "") || "",
         t.metodo_pago || "tarjeta",
         t.descripcion || "",
         t.monto,
+        t.interes_bruto ?? "", t.impuesto_retenido ?? "", t.etiquetas?.join(", ") || "", t.requiere_revision ? "Sí" : "No", t.motivo_revision || "",
       ]);
 
       // aoa_to_sheet guarda cada valor de texto como celda tipo string (t: 's')
@@ -57,8 +64,8 @@ export function ExportButton({ anio, mes, nombreMes }: Props) {
           ["Fecha", "Origen", "Destino", "Descripción", "Monto"],
           ...transferencias.map((t) => [
             t.fecha,
-            t.origen,
-            t.destino,
+            nombres.get(t.cuenta_origen_id || "") || t.origen,
+            nombres.get(t.cuenta_destino_id || "") || t.destino,
             t.descripcion || "",
             t.monto,
           ]),

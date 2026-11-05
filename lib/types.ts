@@ -8,6 +8,10 @@ export interface Categoria {
   nombre: string;
   tipo: TipoCategoria;
   grupo: GrupoCategoria | null;
+  familia?: string | null;
+  archivada?: boolean;
+  naturaleza?: import("./finance/types").NaturalezaMovimiento | null;
+  aliases?: string[];
 }
 
 export interface Transaccion {
@@ -22,6 +26,18 @@ export interface Transaccion {
   gasto_recurrente_id?: string | null;
   cliente_id?: string | null;
   creado_en: string;
+  naturaleza?: import("./finance/types").NaturalezaMovimiento | null;
+  cuenta_id?: string | null;
+  cuenta_destino_id?: string | null;
+  etiquetas?: string[];
+  requiere_revision?: boolean;
+  motivo_revision?: string | null;
+  interes_bruto?: number | null;
+  impuesto_retenido?: number | null;
+  deuda_liquidada_en?: string | null;
+  movimiento_relacionado_id?: string | null;
+  eliminado_en?: string | null;
+  clave_solicitud?: string | null;
 }
 
 export interface Cliente {
@@ -39,6 +55,7 @@ export interface MetaAhorro {
 
 /** Traspaso de dinero entre métodos de pago. No es ingreso ni egreso: no afecta el patrimonio total. */
 export interface Transferencia {
+  clave_solicitud?: string | null;
   id: string;
   user_id: string;
   monto: number;
@@ -47,6 +64,9 @@ export interface Transferencia {
   fecha: string; // 'YYYY-MM-DD'
   descripcion: string | null;
   creado_en: string;
+  cuenta_origen_id?: string | null;
+  cuenta_destino_id?: string | null;
+  eliminado_en?: string | null;
 }
 
 /** Transacción con su categoría embebida (via join), tal como la usa la UI. */
@@ -118,6 +138,7 @@ export interface ResumenMes {
   ingresosPorCliente: IngresoPorCliente[];
   /** IDs de gastos recurrentes que ya generaron un cobro en este mes. */
   recurrentesCobrados: string[];
+  finanzas?: import("./finance/types").ResumenFinanciero;
 }
 
 export interface IngresoPorCliente {

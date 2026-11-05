@@ -43,3 +43,11 @@ test("un traspaso cambia las cuentas sin crear ingresos ni egresos", () => {
   assert.equal(total.ingresos, 800);
   assert.equal(total.egresos, 550);
 });
+
+test("un reembolso afecta el balance y no distorsiona la distribución del consumo", () => {
+  const total = calcularTotalesDetallados([...filas, { monto: 200, naturaleza: "reembolso", metodo_pago: "tarjeta", categoria: { id: "devolucion", nombre: "Reembolso", tipo: "ingreso", grupo: null } }]);
+  assert.equal(total.egresos, 350);
+  assert.equal(total.ingresos, 800);
+  assert.equal(total.egresosFijos + total.egresosVariables, 550);
+  assert.deepEqual(total.egresosPorCategoria.map(c => c.monto), [300, 250]);
+});

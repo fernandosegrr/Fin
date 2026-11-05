@@ -15,6 +15,8 @@ interface Props {
   ingresosPorCliente?: IngresoPorCliente[];
   anio: number;
   mes: number;
+  onVerCategoria?: (id: string) => void;
+  onVerCliente?: (nombre: string) => void;
 }
 
 export function AnalyticsSummary({
@@ -25,12 +27,14 @@ export function AnalyticsSummary({
   ingresosPorCliente = [],
   anio,
   mes,
+  onVerCategoria,
+  onVerCliente,
 }: Props) {
   // Promedio diario: días transcurridos DEL MES QUE SE ESTÁ VIENDO, no de hoy
   // (si no, ver enero muestra el gasto total de enero dividido entre el día
   // de hoy en agosto).
   const diasTranscurridos = diasTranscurridosEnMes(anio, mes);
-  const promedioDiario = totalEgresos > 0 ? Math.round(totalEgresos / Math.max(1, diasTranscurridos)) : 0;
+  const promedioDiario = totalEgresos > 0 ? Math.round(totalEgresos / Math.max(1, diasTranscurridos) * 100) / 100 : 0;
 
   // `egresosPorCategoria` ya llega ordenado de mayor a menor desde el servidor.
   const topCategoria = egresosPorCategoria[0] ?? { nombre: "Sin egresos", monto: 0 };
@@ -72,6 +76,7 @@ export function AnalyticsSummary({
           <p className="mt-0.5 text-xs text-[#62688B] font-bold tabular-nums">
             {formatearMonto(topCategoria.monto)}
           </p>
+          {topCategoria.categoria_id && onVerCategoria && <button className="text-[11px] underline text-[#286F50] mt-1" onClick={() => onVerCategoria(topCategoria.categoria_id)}>Ver movimientos</button>}
         </SpotlightCard>
 
         {/* Fijo vs Variable */}
@@ -118,9 +123,9 @@ export function AnalyticsSummary({
             Ingresos por cliente / proyecto
           </div>
           <div className="space-y-1.5">
-            {ingresosPorCliente.slice(0, 8).map((c) => (
+            {ingresosPorCliente.map((c) => (
               <div key={c.cliente_id ?? "sin"} className="flex items-center justify-between text-xs">
-                <span className="truncate text-[#475C50]">{c.nombre}</span>
+                <button type="button" onClick={() => onVerCliente?.(c.nombre)} className="truncate text-[#475C50] text-left hover:underline">{c.nombre}</button>
                 <span className="font-semibold tabular-nums text-[#286F50] shrink-0 pl-2">{formatearMonto(c.monto)}</span>
               </div>
             ))}

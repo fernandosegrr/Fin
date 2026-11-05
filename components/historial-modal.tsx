@@ -3,12 +3,22 @@
 import { Search, X, Loader2, ArrowUpRight, ArrowDownRight, ArrowRightLeft } from "lucide-react";
 import { formatearFechaCorta } from "@/lib/dates";
 import { formatearMonto } from "@/lib/format";
-import type { MetodoPago } from "@/lib/types";
-import { useHistorySearch } from "./history/use-history-search";
+import type { Categoria, Cliente, MetodoPago, TransaccionConCategoria } from "@/lib/types";
+import { useHistorySearch } from "./finance/use-ledger-search";
+import { NATURALEZAS, NOMBRES_NATURALEZA, type CuentaFinanciera } from "@/lib/finance/types";
+import { naturalezaDe, signoMovimiento } from "@/lib/finance/ledger";
+import type { FiltrosLibro } from "@/lib/dashboard/ledger";
+import { TransactionCaptureModal } from "./transaction-capture-modal";
+import { useState } from "react";
 
 interface Props {
   abierto: boolean;
   onCerrar: () => void;
+  cuentas?: CuentaFinanciera[];
+  categorias?: Categoria[];
+  clientes?: Cliente[];
+  inicial?: FiltrosLibro;
+  onCambio?: () => void;
 }
 
 const NOMBRE_METODO: Record<MetodoPago, string> = {
@@ -16,11 +26,14 @@ const NOMBRE_METODO: Record<MetodoPago, string> = {
   efectivo: "Efectivo",
 };
 
-export function HistorialModal({ abierto, onCerrar }: Props) {
+export function HistorialModal({ abierto, onCerrar, cuentas = [], categorias = [], clientes = [], inicial = {}, onCambio }: Props) {
+  const [editando, setEditando] = useState<TransaccionConCategoria | null>(null);
+  const [version, setVersion] = useState(0);
   const {
     busqueda, setBusqueda, tipo, setTipo, metodo, setMetodo, cargando, cargandoMas, error,
     totalGeneral, hayMas, items, cargarMas,
-  } = useHistorySearch(abierto, onCerrar);
+    cuentaId, setCuentaId, categoriaId, setCategoriaId, naturaleza, setNaturaleza, desde, setDesde, hasta, setHasta, soloRevision, setSoloRevision,
+  } = useHistorySearch(abierto, onCerrar, inicial, version, !editando);
 
   if (!abierto) return null;
 
@@ -35,7 +48,7 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="titulo-historial"
-        className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#DCE4DB] bg-white p-6 shadow-2xl backdrop-blur-2xl max-h-[88dvh] flex flex-col"
+        className="w-full max-w-3xl rounded-t-3xl sm:rounded-3xl border border-[#DCE4DB] bg-white p-5 sm:p-6 shadow-2xl backdrop-blur-2xl max-h-[92dvh] flex flex-col"
       >
         <div className="flex items-center justify-between pb-3.5 border-b border-[#DCE4DB]">
           <h2 id="titulo-historial" className="text-base font-black text-[#1C3028] flex items-center gap-2">
@@ -62,6 +75,16 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
               placeholder="Buscar por descripción, categoría o cliente..."
               className="w-full rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] pl-10 pr-4 py-2.5 text-xs text-[#1C3028] placeholder:text-[#7A897D] focus:border-emerald-400/50 focus:outline-none transition-colors"
             />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <label className="text-[11px] text-[#5E7165]">Desde<input aria-label="Fecha inicial" type="date" value={desde} onChange={e => setDesde(e.target.value)} className="w-full rounded-xl border border-[#DCE4DB] p-2 text-xs" /></label>
+            <label className="text-[11px] text-[#5E7165]">Hasta<input aria-label="Fecha final" type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="w-full rounded-xl border border-[#DCE4DB] p-2 text-xs" /></label>
+            <label className="text-[11px] text-[#5E7165]">Cuenta<select aria-label="Filtrar cuenta" value={cuentaId} onChange={e => setCuentaId(e.target.value)} className="w-full rounded-xl border border-[#DCE4DB] p-2 text-xs"><option value="">Todas</option>{cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+            <label className="text-[11px] text-[#5E7165]">Categoría<select aria-label="Filtrar categoría" value={categoriaId} onChange={e => setCategoriaId(e.target.value)} className="w-full rounded-xl border border-[#DCE4DB] p-2 text-xs"><option value="">Todas</option>{categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <select aria-label="Naturaleza del movimiento" value={naturaleza} onChange={e => setNaturaleza(e.target.value as typeof naturaleza)} className="rounded-xl border border-[#DCE4DB] p-2 text-xs"><option value="">Todos los movimientos</option>{NATURALEZAS.map(n => <option key={n} value={n}>{NOMBRES_NATURALEZA[n]}</option>)}</select>
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={soloRevision} onChange={e => setSoloRevision(e.target.checked)} /> Solo pendientes de revisión</label>
           </div>
           <div className="flex flex-wrap gap-2">
             <div className="flex rounded-xl bg-[#F7F9F5] p-1 border border-[#DCE4DB] text-xs font-bold">
@@ -130,7 +153,7 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-[#263D33] truncate">
-                        Traspaso: {NOMBRE_METODO[t.origen]} → {NOMBRE_METODO[t.destino]}
+                        Traspaso: {cuentas.find(c => c.id === t.cuenta_origen_id)?.nombre || NOMBRE_METODO[t.origen]} → {cuentas.find(c => c.id === t.cuenta_destino_id)?.nombre || NOMBRE_METODO[t.destino]}
                       </p>
                       <p className="text-[10px] text-[#7A897D] truncate">
                         {formatearFechaCorta(t.fecha)}
@@ -147,9 +170,10 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
             }
 
             const t = item.data;
-            const esIngreso = t.categoria?.tipo === "ingreso";
+            const esIngreso = signoMovimiento(t) > 0;
+            const n = naturalezaDe(t);
             return (
-              <div key={item.key} className="flex items-center justify-between p-2.5 rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB]">
+              <button type="button" key={`${item.key}-${version}`} onClick={() => setEditando(t)} className="w-full text-left flex items-center justify-between p-2.5 rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] hover:border-[#286F50]">
                 <div className="flex items-center gap-2 min-w-0">
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
@@ -162,19 +186,22 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
                     <p className="text-xs font-semibold text-[#263D33] truncate">
                       {t.categoria?.nombre ?? "Sin categoría"}
                       {t.cliente?.nombre ? ` · ${t.cliente.nombre}` : ""}
+                      {t.requiere_revision && <span className="ml-2 text-[#A66E31]">Por revisar</span>}
                     </p>
                     <p className="text-[10px] text-[#7A897D] truncate">
                       {formatearFechaCorta(t.fecha)}
                       {t.descripcion ? ` · ${t.descripcion}` : ""}
                       {` · ${t.metodo_pago === "efectivo" ? "Efectivo" : "Tarjeta"}`}
+                      {` · ${NOMBRES_NATURALEZA[n]}`}
+                      {!!t.etiquetas?.length && ` · ${t.etiquetas.join(", ")}`}
                     </p>
                   </div>
                 </div>
                 <span className={`text-xs font-bold tabular-nums shrink-0 pl-2 ${esIngreso ? "text-[#286F50]" : "text-[#1C3028]"}`}>
-                  {esIngreso ? "+" : "−"}
+                  {n === "traspaso" ? "↔ " : esIngreso ? "+" : "−"}
                   {formatearMonto(t.monto)}
                 </span>
-              </div>
+              </button>
             );
           })}
           {hayMas && (
@@ -192,6 +219,7 @@ export function HistorialModal({ abierto, onCerrar }: Props) {
           )}
         </div>
       </div>
+      {editando && <TransactionCaptureModal abierto categorias={categorias} clientes={clientes} cuentas={cuentas} transaccionEditar={editando} onCerrar={() => setEditando(null)} onEnviar={() => {}} onGuardado={() => { setVersion(v => v + 1); setEditando(null); onCambio?.(); }} />}
     </div>
   );
 }

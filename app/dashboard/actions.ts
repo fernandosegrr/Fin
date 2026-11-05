@@ -11,6 +11,20 @@ import * as domainClients from "@/lib/dashboard/clients";
 import * as domainGoals from "@/lib/dashboard/goals";
 import * as domainDashboard from "@/lib/dashboard/dashboard";
 import * as domainHistory from "@/lib/dashboard/history";
+import * as domainAccounts from "@/lib/dashboard/accounts";
+import * as domainAudit from "@/lib/dashboard/audit";
+import * as domainLedger from "@/lib/dashboard/ledger";
+
+export async function obtenerCuentas() { return domainAccounts.obtenerCuentas(); }
+export async function guardarCuenta(...args: Parameters<typeof domainAccounts.guardarCuenta>) { return domainAccounts.guardarCuenta(...args); }
+export async function registrarRendimiento(...args: Parameters<typeof domainAccounts.registrarRendimiento>) { return domainAccounts.registrarRendimiento(...args); }
+export async function ajustarSaldoCuenta(...args: Parameters<typeof domainAccounts.ajustarSaldoCuenta>) { return domainAccounts.ajustarSaldoCuenta(...args); }
+export async function restaurarTransferencia(...args: Parameters<typeof domainTransfers.restaurarTransferencia>) { return domainTransfers.restaurarTransferencia(...args); }
+export async function obtenerCambiosFinancieros() { return domainAudit.obtenerCambiosFinancieros(); }
+export async function revertirLoteFinanciero(...args: Parameters<typeof domainAudit.revertirLoteFinanciero>) { return domainAudit.revertirLoteFinanciero(...args); }
+export async function buscarHistorialFinanciero(...args: Parameters<typeof domainLedger.buscarHistorialFinanciero>) { return domainLedger.buscarHistorialFinanciero(...args); }
+export async function obtenerInformeFinanciero(...args: Parameters<typeof domainLedger.obtenerInformeFinanciero>) { return domainLedger.obtenerInformeFinanciero(...args); }
+export async function obtenerDeudasPendientes() { return (await domainLedger.obtenerInformeFinanciero()).resumen.deudasPendientes; }
 
 export type { CrearCategoriaInput } from "@/lib/dashboard/categories";
 export type { NuevaTransaccion, ActualizarTransaccionInput } from "@/lib/dashboard/transactions";
@@ -36,6 +50,8 @@ export async function crearCategoria(...args: Parameters<typeof domainCategories
 export async function eliminarCategoria(...args: Parameters<typeof domainCategories.eliminarCategoria>) {
   return domainCategories.eliminarCategoria(...args);
 }
+export async function actualizarCategoria(...args: Parameters<typeof domainCategories.actualizarCategoria>) { return domainCategories.actualizarCategoria(...args); }
+export async function fusionarCategorias(...args: Parameters<typeof domainCategories.fusionarCategorias>) { return domainCategories.fusionarCategorias(...args); }
 
 export async function crearTransaccion(...args: Parameters<typeof domainTransactions.crearTransaccion>) {
   return domainTransactions.crearTransaccion(...args);
@@ -48,6 +64,7 @@ export async function actualizarTransaccion(...args: Parameters<typeof domainTra
 export async function eliminarTransaccion(...args: Parameters<typeof domainTransactions.eliminarTransaccion>) {
   return domainTransactions.eliminarTransaccion(...args);
 }
+export async function restaurarTransaccion(...args: Parameters<typeof domainTransactions.restaurarTransaccion>) { return domainTransactions.restaurarTransaccion(...args); }
 
 export async function crearTransferencia(...args: Parameters<typeof domainTransfers.crearTransferencia>) {
   return domainTransfers.crearTransferencia(...args);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Eraser, Loader2, Send, Sparkles } from "lucide-react";
+import { Bot, Eraser, Loader2, Send, Sparkles, ArrowDown } from "lucide-react";
 import { nombreDelMes } from "@/lib/dates";
 import { GlowButton } from "@/components/react-bits/GlowButton";
 import { AdvisorMarkdown } from "./advisor/advisor-markdown";
@@ -11,24 +11,27 @@ interface Props {
   anio: number;
   mes: number;
   onDatosCambiados?: () => void;
+  activo?: boolean;
 }
 
 const SUGERENCIAS = [
-  "Desglosa mis compras más caras del mes en una tabla",
-  "¿En qué comercios o conceptos he gastado más?",
-  "¿Cómo va mi balance y mis compras con tarjeta vs efectivo?",
+  "¿Cuánto puedo gastar esta semana considerando mis pagos pendientes?",
+  "¿Qué gastos podría reducir según mi historial?",
+  "Separa mi consumo, ahorro y rendimientos netos de este mes",
   "Anota $50 de pollo en efectivo",
 ];
 
-export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
+export function AsesorChat({ anio, mes, onDatosCambiados, activo = true }: Props) {
   const {
     mensajes, cargando, errorCarga, texto, setTexto, enviando, borrando, finRef, textareaRef,
     enviarMensaje, ajustarAlturaTextarea, manejarSubmit, manejarTeclaTextarea,
     borrarConversacion, nombreMes, cercaDelLimite, reintentarCarga,
-  } = useAdvisorChat(anio, mes, onDatosCambiados);
+    listaRef, panelRef, alDesplazarLista, mostrarIrAlFinal, irAlFinal, hayAnteriores, cargarAnteriores, cargandoAnteriores,
+    estadoRespuesta,
+  } = useAdvisorChat(anio, mes, onDatosCambiados, activo);
 
   return (
-    <div className="rounded-3xl border border-[#DCE4DB] bg-white shadow-2xl shadow-black/5 overflow-hidden flex flex-col backdrop-blur-2xl">
+    <div ref={panelRef} className="advisor-panel relative rounded-3xl border border-[#DCE4DB] bg-white shadow-2xl shadow-black/5 overflow-hidden flex flex-col">
       <div className="px-4 sm:px-6 py-4 border-b border-[#DCE4DB] flex items-center gap-3 bg-[#F4F7F2]">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-500/20 via-cyan-500/20 to-violet-500/20 border border-emerald-400/30 text-[#286F50] shrink-0 shadow-sm shadow-emerald-500/20">
           <Bot className="h-5 w-5" />
@@ -39,7 +42,7 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
               Asesor Financiero IA <span className="font-semibold text-[#7A897D] text-xs">· {nombreMes}</span>
             </h2>
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold text-[#286F50]">
-              GPT-6 Luna
+              Con tus movimientos
             </span>
           </div>
           <p className="text-[11px] text-[#5E7165]">
@@ -60,7 +63,8 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
         )}
       </div>
 
-      <div className="px-4 sm:px-8 py-6 space-y-4 overflow-y-auto min-h-72 max-h-[60dvh]">
+      <div ref={listaRef} onScroll={alDesplazarLista} role="log" aria-label="Conversación con el asesor" aria-live="polite" className="advisor-messages px-4 sm:px-6 py-5 space-y-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
+        {hayAnteriores && <button type="button" onClick={cargarAnteriores} disabled={cargandoAnteriores} className="finance-action w-full">{cargandoAnteriores ? "Cargando…" : "Ver mensajes anteriores"}</button>}
         {cargando && (
           <div className="space-y-3">
             <div className="h-14 w-2/3 rounded-2xl bg-[#E8EEE7] animate-pulse border border-[#DCE4DB]" />
@@ -133,7 +137,7 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm bg-[#F7F9F5] border border-[#DCE4DB] text-[#5E7165]">
               <span className="flex items-center gap-2 font-medium">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#286F50]" /> Analizando tus compras y movimientos con GPT-6 Luna...
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#286F50]" /> {estadoRespuesta || "Analizando tus datos…"}
               </span>
             </div>
           </div>
@@ -142,7 +146,9 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
         <div ref={finRef} />
       </div>
 
-      <form onSubmit={manejarSubmit} className="px-4 sm:px-6 py-3.5 border-t border-[#DCE4DB] bg-[#F7F9F5] flex items-end gap-2.5">
+      {mostrarIrAlFinal && <button type="button" onClick={irAlFinal} className="absolute right-5 bottom-24 rounded-full border border-[#DCE4DB] bg-white p-2 shadow-lg text-[#286F50]" aria-label="Ir al último mensaje"><ArrowDown size={19} /></button>}
+
+      <form onSubmit={manejarSubmit} className="shrink-0 px-4 sm:px-6 py-3.5 border-t border-[#DCE4DB] bg-[#F7F9F5] flex items-end gap-2.5">
         <div className="flex-1 rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] px-4 py-2.5 focus-within:border-emerald-400/50 transition-colors">
           <textarea
             ref={textareaRef}
@@ -155,7 +161,8 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
             placeholder="Pregunta por una compra, pide una tabla o registra un gasto..."
             rows={1}
             maxLength={MAX_CARACTERES}
-            readOnly={enviando || cargando || Boolean(errorCarga)}
+            readOnly={cargando || Boolean(errorCarga)}
+            aria-label="Mensaje para el asesor"
             className="w-full bg-transparent text-xs sm:text-sm text-[#1C3028] placeholder:text-[#96A399] focus:outline-none resize-none"
           />
           {cercaDelLimite && (
@@ -164,7 +171,7 @@ export function AsesorChat({ anio, mes, onDatosCambiados }: Props) {
             </p>
           )}
         </div>
-        <GlowButton type="submit" variant="primary" disabled={enviando || cargando || Boolean(errorCarga) || !texto.trim()} className="!p-3 shrink-0 rounded-2xl">
+        <GlowButton type="submit" aria-label="Enviar mensaje" variant="primary" disabled={enviando || cargando || Boolean(errorCarga) || !texto.trim()} className="!p-3 shrink-0 rounded-2xl">
           {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </GlowButton>
       </form>

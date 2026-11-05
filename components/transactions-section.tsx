@@ -9,6 +9,10 @@ import type { Categoria, Cliente, TransaccionConCategoria } from "@/lib/types";
 import { TransactionCaptureModal } from "./transaction-capture-modal";
 import { CategoryManagerModal } from "./category-manager-modal";
 import { useTransactions } from "./transactions/use-transactions";
+import type { CuentaFinanciera } from "@/lib/finance/types";
+import { naturalezaDe, signoMovimiento } from "@/lib/finance/ledger";
+import { NOMBRES_NATURALEZA } from "@/lib/finance/types";
+import { useEffect, useState } from "react";
 
 interface Props {
   initialTransacciones: TransaccionConCategoria[];
@@ -16,6 +20,7 @@ interface Props {
   totalTransacciones: number;
   categorias: Categoria[];
   clientes?: Cliente[];
+  cuentas?: CuentaFinanciera[];
   onTransaccionCambiada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
 }
 
@@ -24,6 +29,7 @@ export function TransactionsSection({
   totalTransacciones,
   categorias,
   clientes = [],
+  cuentas = [],
   onTransaccionCambiada,
 }: Props) {
   const {
@@ -31,6 +37,8 @@ export function TransactionsSection({
     transaccionAEditar, busqueda, setBusqueda, filtroTipo, setFiltroTipo, filtroMetodo, setFiltroMetodo,
     errorEnvio, transacciones, transaccionesFiltradas, manejarEnvio, manejarEliminar, abrirEdicion, abrirNuevo,
   } = useTransactions({ initialTransacciones, categorias, clientes, onTransaccionCambiada });
+  const [limiteVisible, setLimiteVisible] = useState(50);
+  useEffect(() => setLimiteVisible(50), [busqueda, filtroTipo, filtroMetodo]);
 
   return (
     <>
@@ -46,7 +54,7 @@ export function TransactionsSection({
                 Movimientos del Mes
               </h2>
               <p className="text-xs text-[#5E7165]">
-                Mostrando {transaccionesFiltradas.length} de {transacciones.length} transacciones registradas
+                Mostrando {Math.min(limiteVisible, transaccionesFiltradas.length)} de {transaccionesFiltradas.length} resultados · {transacciones.length} movimientos en el mes
               </p>
             </div>
 
@@ -183,8 +191,9 @@ export function TransactionsSection({
             </div>
           ) : (
             <div className="space-y-2">
-              {transaccionesFiltradas.map((t) => {
-                const esIngreso = t.categoria?.tipo === "ingreso";
+              {transaccionesFiltradas.slice(0, limiteVisible).map((t) => {
+                const esIngreso = signoMovimiento(t) > 0;
+                const naturaleza = naturalezaDe(t);
                 const esEfectivo = t.metodo_pago === "efectivo";
 
                 return (
@@ -235,6 +244,9 @@ export function TransactionsSection({
                         <p className="truncate text-[11px] text-[#5E7165] mt-0.5">
                           {formatearFechaCorta(t.fecha)}
                           {t.descripcion ? ` · ${t.descripcion}` : ""}
+                          {` · ${NOMBRES_NATURALEZA[naturaleza]}`}
+                          {!!t.etiquetas?.length && ` · ${t.etiquetas.join(", ")}`}
+                          {t.requiere_revision && " · Por revisar"}
                         </p>
                       </div>
                     </div>
@@ -245,7 +257,7 @@ export function TransactionsSection({
                           esIngreso ? "text-[#286F50]" : "text-[#1C3028]"
                         }`}
                       >
-                        {esIngreso ? "+" : "−"}
+                        {naturaleza === "traspaso" ? "↔ " : esIngreso ? "+" : "−"}
                         {formatearMonto(t.monto)}
                       </span>
                     </div>
@@ -254,6 +266,7 @@ export function TransactionsSection({
               })}
             </div>
           )}
+          {limiteVisible < transaccionesFiltradas.length && <button type="button" className="finance-action w-full mt-4" onClick={() => setLimiteVisible(n => n + 50)}>Ver 50 movimientos más</button>}
         </SpotlightCard>
       </section>
 
@@ -273,6 +286,8 @@ export function TransactionsSection({
 
       {/* Modales */}
       <TransactionCaptureModal
+        cuentas={cuentas}
+        onGuardado={onTransaccionCambiada}
         onCategoriasCambiadas={onTransaccionCambiada}
         categorias={categorias}
         clientes={clientes}

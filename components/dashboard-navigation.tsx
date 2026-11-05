@@ -1,9 +1,9 @@
 "use client";
 
-import { LayoutDashboard, Repeat2, PieChart, Target, Sparkles, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Repeat2, PieChart, Target, Sparkles, ChevronRight, Wallet } from "lucide-react";
 import { BrandLogo } from "./brand-logo";
 
-export type TabId = "inicio" | "suscripciones" | "estadisticas" | "presupuestos" | "asesor";
+export type TabId = "inicio" | "cuentas" | "suscripciones" | "estadisticas" | "presupuestos" | "asesor";
 
 export interface NavigationSection {
   id: TabId;
@@ -21,6 +21,7 @@ export const sections: readonly NavigationSection[] = [
     description: "Tu balance global, metas y movimientos recientes.",
     icon: LayoutDashboard,
   },
+  { id: "cuentas", label: "Cuentas y rendimientos", shortLabel: "Dinero", description: "Tu dinero principal, ahorro, traspasos y ganancias netas.", icon: Wallet },
   {
     id: "suscripciones",
     label: "Pagos Recurrentes",

@@ -4,20 +4,26 @@ import { textoDeError } from "./utils";
 import type { ResultadoHistorialAsesor, ResultadoBorrarHistorialAsesor } from "./types";
 import type { MensajeAsesor } from "@/lib/types";
 
-export async function obtenerHistorialAsesor(): Promise<ResultadoHistorialAsesor> {
+export async function obtenerHistorialAsesor(cursor?: { creado_en: string; id: string }): Promise<ResultadoHistorialAsesor> {
   try {
     const supabase = await createClient();
 
     // Sin getUser(): lectura, RLS ya filtra por auth.uid() (mismo criterio que
     // obtenerCategorias/obtenerGastosRecurrentes en actions.ts).
-    const { data, error } = await supabase
+    if (cursor && (!/^\d{4}-\d{2}-\d{2}T[0-9:.+Z-]+$/.test(cursor.creado_en) || !/^[a-f0-9-]{36}$/i.test(cursor.id))) return { ok: false, error: "El cursor del historial no es válido." };
+    let consulta = supabase
       .from("mensajes_asesor")
       .select("id, rol, contenido, creado_en")
       .order("creado_en", { ascending: false })
-      .limit(MENSAJES_HISTORIAL_UI);
+      .order("id", { ascending: false })
+      .limit(MENSAJES_HISTORIAL_UI + 1);
+    if (cursor) consulta = consulta.or(`creado_en.lt.${cursor.creado_en},and(creado_en.eq.${cursor.creado_en},id.lt.${cursor.id})`);
+    const { data, error } = await consulta;
 
     if (error) return { ok: false, error: `No se pudo cargar el historial del asesor: ${error.message}` };
-    return { ok: true, mensajes: ((data ?? []) as MensajeAsesor[]).reverse() };
+    const filas = ((data ?? []) as MensajeAsesor[]).slice(0, MENSAJES_HISTORIAL_UI);
+    const ultima = filas[filas.length - 1];
+    return { ok: true, mensajes: filas.reverse(), hayMas: (data?.length ?? 0) > MENSAJES_HISTORIAL_UI, cursorAnterior: ultima ? { creado_en: ultima.creado_en, id: ultima.id } : null };
   } catch (err) {
     console.error("Error cargando el historial del asesor:", err);
     return { ok: false, error: textoDeError(err, "No se pudo cargar el historial del asesor.") };

@@ -23,10 +23,12 @@ import { formatearFechaCorta } from "@/lib/dates";
 import { type BalanceMensual } from "@/app/dashboard/actions";
 import type { DesgloseMetodoPago } from "@/lib/types";
 import { NOMBRE_METODO, useBalanceActions } from "./balance/use-balance-actions";
+import { FinancialOverview } from "./finance/financial-overview";
 
 interface Props {
   actual: BalanceMensual["actual"];
   onTransferenciaRealizada?: (mensajeToast?: { texto: string; tipo?: "success" | "error" | "info" }) => void;
+  onVerCuentas?: () => void;
 }
 
 
@@ -61,7 +63,11 @@ function DesgloseMetodo({
   );
 }
 
-export function BalanceResumen({ actual, onTransferenciaRealizada }: Props) {
+export function BalanceResumen(props: Props) {
+  return props.actual.finanzas ? <FinancialOverview actual={props.actual} onVerCuentas={props.onVerCuentas} /> : <LegacyBalanceResumen {...props} />;
+}
+
+function LegacyBalanceResumen({ actual, onTransferenciaRealizada }: Props) {
   const {
     saldoPositivo, porcentajeDisponible, modalAbierto, setModalAbierto, montoTexto, setMontoTexto,
     origen, setOrigen, descripcion, setDescripcion, fecha, setFecha, isSaving, eliminandoId,

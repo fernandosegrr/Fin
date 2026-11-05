@@ -82,6 +82,39 @@ input[type="number"] {
   box-shadow: 0 8px 30px -22px rgba(31, 67, 43, 0.24);
 }
 
+.finance-action, .finance-action-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #dce4db;
+  border-radius: 12px;
+  background: #f4f7f2;
+  color: #286f50;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.finance-action:hover { background: #e7f1e8; }
+.finance-action-primary { background: #286f50; color: white; border-color: #286f50; }
+.finance-action-primary:hover { background: #245c42; }
+
+.dashboard-shell.dashboard-shell--advisor { height: var(--advisor-viewport-height, 100dvh); min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+html.advisor-open, .advisor-open body { overflow: hidden; overscroll-behavior: none; }
+.dashboard-shell--advisor .dashboard-header, .dashboard-shell--advisor .page-heading { flex-shrink: 0; }
+.dashboard-shell--advisor .page-heading { padding-top: 14px; padding-bottom: 12px; }
+.dashboard-shell--advisor #contenido { flex: 1; min-height: 0; display: flex; }
+.advisor-host { display: flex; flex: 1; min-height: 0; }
+.advisor-panel { width: 100%; flex: 1; min-height: 0; }
+.advisor-messages { overflow-anchor: none; scrollbar-gutter: stable; }
+@media (max-width: 1023px) {
+  .dashboard-shell--advisor .page-heading > div:first-child { display: none; }
+  .advisor-keyboard-open .dashboard-shell--advisor .dashboard-header,
+  .advisor-keyboard-open .dashboard-shell--advisor .page-heading,
+  .advisor-keyboard-open .dashboard-shell--advisor nav[aria-label="Navegación móvil"] { display: none; }
+  .advisor-keyboard-open .dashboard-shell--advisor { padding-bottom: 0; }
+}
+
 .dashboard-shell {
   min-height: 100dvh;
   padding: 0 16px calc(96px + env(safe-area-inset-bottom));

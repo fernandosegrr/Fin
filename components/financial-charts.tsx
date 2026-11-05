@@ -22,6 +22,7 @@ interface Props {
   egresosPorCategoria: EgresoPorCategoria[];
   ingresosTotales: number;
   egresosTotales: number;
+  onVerCategoria?: (id: string) => void;
 }
 
 const PALETTE = [
@@ -35,15 +36,16 @@ const PALETTE = [
   "#789A8D",
 ];
 
-export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosTotales }: Props) {
+export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosTotales, onVerCategoria }: Props) {
   const [activeTab, setActiveTab] = useState<"pie" | "bar">("pie");
 
-  const pieData = egresosPorCategoria.map((e) => ({ id: e.categoria_id, name: e.nombre, value: e.monto }));
+  const pieData = egresosPorCategoria.filter(e => e.monto > 0).map((e) => ({ id: e.categoria_id, name: e.nombre, value: e.monto }));
+  const totalRepresentado = pieData.reduce((s, e) => s + e.value, 0);
 
   // Datos para comparativa Flujo de Efectivo
   const barData = [
     { name: "Ingresos", monto: ingresosTotales, fill: "#2B7353" },
-    { name: "Egresos", monto: egresosTotales, fill: "#B8675D" },
+    { name: "Consumo", monto: egresosTotales, fill: "#B8675D" },
   ];
 
   return (
@@ -59,9 +61,9 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-[#1C3028]">
-                {activeTab === "pie" ? "Gastos por categoría" : "Ingresos y gastos"}
+                {activeTab === "pie" ? "Consumo por categoría" : "Ingresos y consumo"}
               </h3>
-              <p className="text-xs text-[#5E7165] mt-0.5">Métricas del periodo visualizado</p>
+              <p className="text-xs text-[#5E7165] mt-0.5">Compras del periodo; reembolsos y ahorro separados</p>
             </div>
           </div>
 
@@ -139,11 +141,11 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
               {/* Leyenda estructurada */}
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {pieData.map((entry, index) => {
-                  const pct = egresosTotales > 0 ? Math.round((entry.value / egresosTotales) * 100) : 0;
+                  const pct = totalRepresentado > 0 ? Math.round((entry.value / totalRepresentado) * 100) : 0;
                   return (
-                    <div
+                    <button type="button" onClick={() => onVerCategoria?.(entry.id)}
                       key={entry.id}
-                      className="flex items-center justify-between text-xs p-2 rounded-xl bg-[#F7F9F5] border border-[#DCE4DB]"
+                      className="flex w-full items-center justify-between text-xs p-2 rounded-xl bg-[#F7F9F5] border border-[#DCE4DB] hover:border-[#286F50]"
                     >
                       <div className="flex items-center gap-2 truncate">
                         <span
@@ -158,7 +160,7 @@ export function FinancialCharts({ egresosPorCategoria, ingresosTotales, egresosT
                           {formatearMonto(entry.value)}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

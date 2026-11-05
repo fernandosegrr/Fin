@@ -31,6 +31,7 @@ export function useDashboardRealtime(recargarDatos: RecargarDatos): EstadoConexi
         .on("postgres_changes", { event: "*", schema: "public", table: "transferencias", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "metas_ahorro", filter: filtro }, () => recargarDatos())
         .on("postgres_changes", { event: "*", schema: "public", table: "clientes", filter: filtro }, () => recargarDatos())
+        .on("postgres_changes", { event: "*", schema: "public", table: "cuentas_financieras", filter: filtro }, () => recargarDatos())
         .subscribe((status) => {
           if (cancelado) return;
           const conectado = status === "SUBSCRIBED";

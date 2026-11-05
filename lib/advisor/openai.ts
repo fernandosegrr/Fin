@@ -1,5 +1,7 @@
 import { ESFUERZO_RAZONAMIENTO, MAX_TOKENS_RESPUESTA, MODELO_ASESOR, OPENAI_CHAT_COMPLETIONS_URL, TIMEOUT_OPENAI_MS } from "./config";
 import { textoDeError } from "./utils";
+import { HERRAMIENTAS_FINANCIERAS } from "./finance-tools";
+import { NATURALEZAS } from "@/lib/finance/types";
 
 export interface MensajeOpenAI {
   role: "system" | "user" | "assistant" | "tool";
@@ -51,6 +53,10 @@ const HERRAMIENTA_REGISTRAR_MOVIMIENTO = {
       type: "object",
       properties: {
         tipo: { type: "string", enum: ["ingreso", "egreso"] },
+        cuenta: { type: "string", description: "Nombre o código exacto de la cuenta del usuario." },
+        naturaleza: { type: "string", enum: [...NATURALEZAS], description: "Efecto económico. Para traspasos y rendimientos usa sus herramientas específicas." },
+        etiquetas: { type: "array", items: { type: "string" } },
+        prestamo_id: { type: "string", description: "Al pagar una deuda registrada, ID del préstamo obtenido del resumen o una consulta. Omitir para deudas anteriores sin registro." },
         monto: { type: "number", description: "Monto en pesos mexicanos, mayor a 0." },
         categoria: { type: "string", description: "Nombre exacto (o muy cercano) de una categoría existente." },
         metodo_pago: { type: "string", enum: ["efectivo", "tarjeta"] },
@@ -90,6 +96,9 @@ const HERRAMIENTA_CONSULTAR_MOVIMIENTOS = {
           description: "Ordenar por más recientes (default) o de mayor a menor monto.",
         },
         limite: { type: "number", description: "Máximo de movimientos a devolver (1 a 50, por defecto 25)." },
+        offset: { type: "number", description: "Desplazamiento para leer otra página; los totales siempre incluyen todos los resultados." },
+        naturaleza: { type: "string", description: "ingreso, egreso, apoyo, rendimiento, reembolso, financiacion, pago_deuda, traspaso, retencion, ajuste_entrada, ajuste_salida, ingreso_pendiente o egreso_pendiente." },
+        cuenta: { type: "string", description: "Nombre de una cuenta propia para consultar solo su actividad." },
       },
     },
   },
@@ -105,6 +114,11 @@ const HERRAMIENTA_EDITAR_MOVIMIENTO = {
       type: "object",
       properties: {
         id: { type: "string", description: "ID del movimiento a editar (aparece como id:... en el detalle)." },
+        cuenta: { type: "string", description: "Cuenta a la que pertenece el movimiento." },
+        naturaleza: { type: "string", enum: [...NATURALEZAS] },
+        etiquetas: { type: "array", items: { type: "string" } },
+        requiere_revision: { type: "boolean" },
+        motivo_revision: { type: "string" },
         monto: { type: "number", description: "Nuevo monto en pesos mexicanos, mayor a 0." },
         categoria: { type: "string", description: "Nuevo nombre de categoría existente." },
         metodo_pago: { type: "string", enum: ["efectivo", "tarjeta"] },
@@ -138,6 +152,7 @@ const HERRAMIENTAS_ASESOR = [
   HERRAMIENTA_CONSULTAR_MOVIMIENTOS,
   HERRAMIENTA_EDITAR_MOVIMIENTO,
   HERRAMIENTA_ELIMINAR_MOVIMIENTO,
+  ...HERRAMIENTAS_FINANCIERAS,
 ];
 
 export async function llamarOpenAI(
@@ -162,7 +177,7 @@ export async function llamarOpenAI(
         // En la última iteración permitida se llama SIN herramientas: así el
         // modelo se ve obligado a cerrar con texto en vez de pedir otra tool
         // call que ya no se va a ejecutar (eso dejaba la respuesta vacía).
-        ...(conHerramientas ? { tools: HERRAMIENTAS_ASESOR } : {}),
+        ...(conHerramientas ? { tools: HERRAMIENTAS_ASESOR, parallel_tool_calls: false } : {}),
         messages: mensajes,
       }),
       signal: AbortSignal.timeout(TIMEOUT_OPENAI_MS),

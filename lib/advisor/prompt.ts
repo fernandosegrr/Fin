@@ -4,9 +4,15 @@ import { sanitizarDato } from "./utils";
 import type { PuntoTendenciaMensual } from "./trend";
 import type { BalanceMensual } from "@/lib/dashboard/balance";
 import type { Categoria, Cliente, GastoRecurrente, PresupuestoConGasto, TransaccionConCategoria } from "@/lib/types";
+import { esConsumo, naturalezaDe } from "@/lib/finance/ledger";
+import { calcularMargenRegistrado } from "@/lib/finance/planning";
+import { hoyISOEnMexico } from "@/lib/dates";
+import { proyectarRendimientos } from "@/lib/finance/returns";
+import { NOMBRES_NATURALEZA } from "@/lib/finance/types";
 
 function formatearLineaTransaccion(t: TransaccionConCategoria): string {
-  const tipo = t.categoria?.tipo === "ingreso" ? "Ingreso" : "Egreso";
+  const n = naturalezaDe(t);
+  const tipo = n === "ingreso" ? "Ingreso" : n === "egreso" ? "Egreso" : NOMBRES_NATURALEZA[n];
   const nombreCat = t.categoria?.nombre ? sanitizarDato(t.categoria.nombre, 50) : "Sin categoría";
   const grupo = t.categoria?.grupo ? ` (${t.categoria.grupo})` : "";
   const metodo = t.metodo_pago === "efectivo" ? "efectivo" : "tarjeta";
@@ -29,8 +35,8 @@ export function construirSystemPrompt(datos: {
   metaObjetivo: number | null;
 }): string {
   const { actual } = datos.balance;
-  const tasaAhorro =
-    actual.ingresos > 0 ? Math.max(0, Math.round(((actual.ingresos - actual.egresos) / actual.ingresos) * 100)) : 0;
+  const ahorroNeto = actual.finanzas ? actual.finanzas.aportacionesAhorro - actual.finanzas.retirosAhorro : actual.ingresos - actual.egresos;
+  const tasaAhorro = actual.ingresos > 0 ? Math.round(ahorroNeto / actual.ingresos * 100) : 0;
   const cobrados = new Set(actual.recurrentesCobrados);
 
   const lineasPresupuestos =
@@ -72,8 +78,8 @@ export function construirSystemPrompt(datos: {
       ? transaccionesMuestra.map(formatearLineaTransaccion).join("\n")
       : "- (no hay compras ni movimientos registrados en este mes)";
 
-  const comprasMes = actual.transacciones.filter((t) => t.categoria?.tipo !== "ingreso");
-  const topCompras = [...comprasMes]
+  const comprasMes = actual.transacciones.filter(esConsumo);
+  const topCompras = actual.finanzas?.compras.mayores ?? [...comprasMes]
     .sort((a, b) => aNumero(b.monto) - aNumero(a.monto))
     .slice(0, 5);
   const lineasTopCompras =
@@ -86,10 +92,22 @@ export function construirSystemPrompt(datos: {
           .join("\n")
       : "- (sin compras registradas este mes)";
 
-  const ticketPromedioCompra =
+  const ticketPromedioCompra = actual.finanzas?.compras.promedio ?? (
     comprasMes.length > 0
       ? comprasMes.reduce((acc, t) => acc + aNumero(t.monto), 0) / comprasMes.length
-      : 0;
+      : 0);
+  const numeroCompras = actual.finanzas?.compras.cantidad ?? comprasMes.length;
+  const margen = calcularMargenRegistrado(actual.saldoTotalDisponible, datos.gastosRecurrentes, actual.recurrentesCobrados, actual.anio, actual.mes, hoyISOEnMexico());
+  const contextoFinanciero = actual.finanzas ? JSON.stringify({
+    ingresosTrabajo: actual.finanzas.ingresosTrabajo, apoyos: actual.finanzas.apoyos, rendimientosNetos: actual.finanzas.rendimientosNetos,
+    consumo: actual.finanzas.consumo, reembolsos: actual.finanzas.reembolsos, ahorro: actual.finanzas.ahorro, disponible: actual.finanzas.disponible,
+    patrimonio: actual.finanzas.patrimonio, deuda: actual.finanzas.deuda, prestamosRecibidos: actual.finanzas.prestamosRecibidos, pagosDeuda: actual.finanzas.pagosDeuda,
+    deudasPendientes: actual.finanzas.deudasPendientes, retencionesRegistradas: actual.finanzas.retenciones, rendimientosSinDesglose: actual.finanzas.rendimientosSinDesglose, estimacionRendimientosPendientes: actual.finanzas.estimacionRendimientos, ajustes: actual.finanzas.ajustes, entradasPorIdentificar: actual.finanzas.entradasPorIdentificar, salidasPorIdentificar: actual.finanzas.salidasPorIdentificar,
+    aportacionesAhorro: actual.finanzas.aportacionesAhorro, retirosAhorro: actual.finanzas.retirosAhorro, pendientesDeRevision: actual.finanzas.pendientes,
+    historicoIngresos: actual.finanzas.historicoIngresos,
+    cuentas: actual.finanzas.cuentas.map(c => ({ id: c.id, nombre: c.nombre, saldo: c.saldo, ahorro: c.excluida_disponible, generaRendimientosDesde: c.rendimiento_desde, plan: c.plan, grupoRendimiento: c.grupo_rendimiento, gananciasNetasMes: c.rendimientosMes })),
+    proyeccion30DiasConSaldoConstante: proyectarRendimientos(actual.finanzas.cuentas, 30, hoyISOEnMexico()),
+  }) : "(modelo básico de cuentas)";
 
   const lineasTransferencias =
     actual.transferencias.length > 0
@@ -125,6 +143,15 @@ Reglas de comportamiento y formato:
   - Para borrar un movimiento que el usuario pida eliminar, usa \`eliminar_movimiento\` con su \`id\`.
   - Para recordar metas, hábitos o datos duraderos del usuario a futuro, usa \`guardar_nota_memoria\`.
 - **Criterio financiero**:
+  - Ahorro y traspasos entre cuentas propias conservan patrimonio: no son consumo ni ingresos ganados. Préstamos, apoyos, reembolsos y ajustes tienen naturaleza separada. Usa el libro financiero canónico de abajo.
+  - El usuario puede tener dinero principal y ahorro en distintos apartados remunerados. Los límites de Revolut son compartidos y las proyecciones nunca se registran como intereses reales.
+  - Si hay rendimientosSinDesglose, sólo se conoce su neto. No presentes el bruto o las retenciones registradas como un total completo ni supongas que no hubo impuestos.
+  - Respeta los nombres discretos elegidos por el usuario; no los sustituyas por términos más explícitos ni deduzcas su significado privado.
+  - Las cifras de compras y su top se calculan sobre TODO el mes. El listado de detalle puede ser una muestra: usa consultar_movimientos para obtener todas las coincidencias y sus totales completos, y offset para más detalle.
+  - Usa consultar_resumen_financiero para comparar periodos completos, verificar saldos después de una acción o responder ingresos históricos. Los totales por naturaleza no se suman todos como si fueran ingresos.
+  - Registrar movimientos, traspasos, intereses, metas, presupuestos o categorías requiere que el usuario lo pida; preguntar cuánto produciría algo es una consulta, no una orden de acreditarlo.
+  - Si pide cuánto puede gastar esta semana, usa el margen calculado después de compromisos registrados. No presupongas ingresos futuros ni gastos que no consten; indica brevemente si hay movimientos pendientes de clasificar.
+  - Las herramientas adicionales permiten registrar_traspaso, registrar_rendimiento, crear_categoria, guardar_presupuesto, guardar_meta y reclasificar_movimientos. Tras modificar datos, verifica el resultado si vas a dar saldos nuevos; el resumen inicial del turno es anterior a esas modificaciones.
   - No eres un asesor bursátil ni fiscal licenciado; no recomiendes acciones o criptomonedas específicas. Enfócate en optimización de gastos, flujo de efectivo, presupuestos, control de compras hormiga y metas de ahorro.
   - Basa tus respuestas estrictamente en los datos reales — no inventes cifras ni compras.
   - Si los egresos del mes superan los ingresos pero el saldo total disponible no es negativo, explica que se cubrió con el saldo inicial (arrastre) sin describirlo como saldo negativo.
@@ -145,7 +172,13 @@ RESUMEN DE ${nombreMes} (calculado en el servidor — confía en estas cifras):
 - Saldo total disponible: ${formatearMonto(actual.saldoTotalDisponible)}
 - Efectivo: ${formatearMonto(actual.totalesEfectivo.saldo)} (ingresos mes: ${formatearMonto(actual.totalesEfectivo.ingresos)}, egresos mes: ${formatearMonto(actual.totalesEfectivo.egresos)}) | Tarjeta/Banco: ${formatearMonto(actual.totalesTarjeta.saldo)} (ingresos mes: ${formatearMonto(actual.totalesTarjeta.ingresos)}, egresos mes: ${formatearMonto(actual.totalesTarjeta.egresos)})
 - Egresos fijos: ${formatearMonto(actual.egresosFijos)} | Egresos variables: ${formatearMonto(actual.egresosVariables)}
-- Número de compras (egresos) registradas en el mes: ${comprasMes.length} (ticket promedio por compra: ${formatearMonto(ticketPromedioCompra)})
+- Número de compras (egresos) registradas en el mes: ${numeroCompras} (ticket promedio por compra: ${formatearMonto(ticketPromedioCompra)})
+
+LIBRO FINANCIERO: CONSUMO, CAPITAL Y CUENTAS (fuente canónica):
+${contextoFinanciero}
+
+MARGEN DE GASTO CON LOS COMPROMISOS REGISTRADOS (no incluye ingresos futuros):
+${margen ? JSON.stringify(margen) : "No corresponde al mes en curso; no dar una recomendación semanal actual con este periodo histórico."}
 
 EGRESOS POR CATEGORÍA (mayor a menor):
 ${lineasCategorias}
@@ -178,13 +211,13 @@ ${
 META DE AHORRO:
 ${
   datos.metaNombre && datos.metaObjetivo
-    ? `- ${sanitizarDato(datos.metaNombre)}: ${formatearMonto(actual.saldoTotalDisponible)} de ${formatearMonto(datos.metaObjetivo)}`
+    ? `- ${sanitizarDato(datos.metaNombre)}: ${formatearMonto(actual.finanzas?.ahorro ?? actual.saldoTotalDisponible)} de ${formatearMonto(datos.metaObjetivo)}`
     : "- (sin meta definida)"
 }
 
 CATEGORÍAS DISPONIBLES (úsalas tal cual en registrar_movimiento / editar_movimiento):
-- Ingreso: ${datos.categorias.filter((c) => c.tipo === "ingreso").map((c) => sanitizarDato(c.nombre)).join(", ") || "(ninguna)"}
-- Egreso: ${datos.categorias.filter((c) => c.tipo === "egreso").map((c) => sanitizarDato(c.nombre)).join(", ") || "(ninguna)"}
+- Ingreso: ${datos.categorias.filter((c) => c.tipo === "ingreso" && !c.archivada).map((c) => sanitizarDato(c.nombre)).join(", ") || "(ninguna)"}
+- Egreso: ${datos.categorias.filter((c) => c.tipo === "egreso" && !c.archivada).map((c) => sanitizarDato(c.nombre)).join(", ") || "(ninguna)"}
 
 CLIENTES / PROYECTOS:
 ${datos.clientes.length ? datos.clientes.map((c) => `- ${sanitizarDato(c.nombre)}`).join("\n") : "- (ninguno todavía)"}

@@ -19,6 +19,7 @@ export async function obtenerGastosRecurrentes(): Promise<GastoRecurrente[]> {
   const { data, error } = await supabase
     .from("gastos_recurrentes")
     .select("*, categoria:categorias(id, nombre, tipo, grupo)")
+    .eq("archivada", false)
     .order("dia_cobro");
 
   if (error) throw new Error(`No se pudieron cargar los gastos recurrentes: ${error.message}`, { cause: error });
@@ -106,7 +107,7 @@ export async function eliminarGastoRecurrente(id: string): Promise<void> {
 
   const { error } = await supabase
     .from("gastos_recurrentes")
-    .delete()
+    .update({ archivada: true })
     .eq("id", id)
     .eq("user_id", user.id);
 
@@ -151,7 +152,7 @@ export type ResultadoAjusteSaldo =
 
 /**
  * Iguala el saldo de un método al monto que el usuario tiene de verdad.
- * Crea un ingreso o egreso de categoría "Ajuste de saldo" con fecha de hoy
+ * Crea una conciliación independiente de ingresos/consumo con fecha de hoy
  * (México), para no reescribir el historial.
  */
 export async function ajustarSaldo(
@@ -181,6 +182,7 @@ export async function ajustarSaldo(
       fecha: hoyISOEnMexico(),
       descripcion: `Ajuste a saldo real (${formatearMonto(saldoObjetivo)})`,
       metodo_pago: metodo,
+      naturaleza: diferencia > 0 ? "ajuste_entrada" : "ajuste_salida",
     });
     if (error) return { ok: false, error: error.message };
 

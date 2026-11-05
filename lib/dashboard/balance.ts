@@ -1,11 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
-import { esMesCalendario, hoyEnMexico, nombreDelMes, rangoDelMes } from "@/lib/dates";
+import { esMesCalendario, hoyEnMexico, hoyISOEnMexico, nombreDelMes, rangoDelMes } from "@/lib/dates";
 import { aNumero, redondearMonto } from "@/lib/format";
 import { traerTodasLasFilas } from "@/lib/supabase/paginar";
 import { esErrorEsquemaClientes } from "@/lib/dashboard/shared";
 import { aplicarTransferencias, calcularTotalesDetallados, type FilaParaTotales } from "@/lib/dashboard/calculations";
 import type { ResumenMes, TransaccionConCategoria, Transferencia } from "@/lib/types";
 import type { ClienteSupabase } from "@/lib/dashboard/shared";
+import { obtenerCuentas } from "@/lib/dashboard/accounts";
+import { resumirLibro, naturalezaDe } from "@/lib/finance/ledger";
+import type { FilaFinanciera } from "@/lib/finance/types";
 
 // BALANCE MENSUAL
 // ─────────────────────────────────────────────
@@ -100,6 +103,7 @@ export async function obtenerTransaccionesCompletasDelMes(
       supabase
         .from("transacciones")
         .select(SELECT_LISTA)
+        .is("eliminado_en", null)
         .gte("fecha", rango.inicio)
         .lt("fecha", rango.finExclusivo)
         .order("fecha", { ascending: false })
@@ -121,6 +125,7 @@ export async function obtenerTransferenciasCompletasDelMes(
       supabase
         .from("transferencias")
         .select("*")
+        .is("eliminado_en", null)
         .gte("fecha", rango.inicio)
         .lt("fecha", rango.finExclusivo)
         .order("fecha", { ascending: false })
@@ -129,7 +134,7 @@ export async function obtenerTransferenciasCompletasDelMes(
   );
 }
 
-export async function obtenerBalanceMensual(
+async function obtenerBalanceMensualLegacy(
   anioTarget?: number,
   mesTarget?: number,
 ): Promise<BalanceMensual> {
@@ -226,6 +231,48 @@ export async function obtenerBalanceMensual(
       totalTransaccionesMes: resLista.count ?? transaccionesActual.length,
     },
   };
+}
+
+export async function obtenerBalanceMensual(anioTarget?: number, mesTarget?: number): Promise<BalanceMensual> {
+  const hoy = hoyEnMexico(); const anio = anioTarget ?? hoy.anio; const mes = mesTarget ?? hoy.mes;
+  if (!esMesCalendario(anio, mes)) throw new Error("Selecciona un mes válido entre 2000 y 2100.");
+  const db = await createClient(); const rango = rangoDelMes(anio, mes);
+  let cuentas;
+  try { cuentas = await obtenerCuentas(); }
+  catch (error) {
+    // Compatibilidad durante el despliegue aditivo; nunca convertir un fallo de red en saldo cero.
+    if (/cuentas_financieras.*(?:schema cache|does not exist)|could not find.*cuentas_financieras/i.test(String(error))) return obtenerBalanceMensualLegacy(anio, mes);
+    throw error;
+  }
+  const [filas, transferencias] = await Promise.all([
+    traerTodasLasFilas<FilaFinanciera>((desde, hasta) => db.from("transacciones").select(SELECT_LISTA).is("eliminado_en", null).lt("fecha", rango.finExclusivo).order("fecha", { ascending: false }).order("creado_en", { ascending: false }).order("id").range(desde, hasta), "No se pudo calcular el historial financiero completo"),
+    traerTodasLasFilas<Transferencia>((desde, hasta) => db.from("transferencias").select("*").is("eliminado_en", null).lt("fecha", rango.finExclusivo).order("fecha", { ascending: false }).order("id").range(desde, hasta), "No se pudieron cargar los traspasos"),
+  ]);
+  const finanzas = resumirLibro(cuentas, filas, transferencias, rango.inicio, rango.finExclusivo);
+  const { estimarRendimientosPendientes } = await import("@/lib/finance/returns");
+  const fechaHoy = hoyISOEnMexico();
+  const ultimoDia = new Date(`${rango.finExclusivo}T12:00:00Z`); ultimoDia.setUTCDate(ultimoDia.getUTCDate() - 1);
+  finanzas.estimacionRendimientos = estimarRendimientosPendientes(cuentas, filas, transferencias, fechaHoy < rango.finExclusivo ? fechaHoy : ultimoDia.toISOString().slice(0, 10));
+  const delMes = filas.filter(t => t.fecha >= rango.inicio);
+  const traspasosDelMes = transferencias.filter(t => t.fecha >= rango.inicio);
+  const totales = calcularTotalesDetallados(delMes);
+  const porMetodo = (metodo: "efectivo" | "tarjeta") => {
+    const seleccion = finanzas.cuentas.filter(c => c.metodo_pago === metodo && !c.excluida_disponible);
+    return { ingresos: totales[metodo].ingresos, egresos: totales[metodo].egresos, neto: redondearMonto(seleccion.reduce((s, c) => s + c.variacion, 0)), saldo: redondearMonto(seleccion.reduce((s, c) => s + c.saldo, 0)) };
+  };
+  const ingresos = redondearMonto(finanzas.ingresosTrabajo + finanzas.apoyos + finanzas.rendimientosNetos);
+  const egresos = redondearMonto(finanzas.consumo - finanzas.reembolsos);
+  const impuestoSeparado = delMes.filter(t => naturalezaDe(t) === "retencion").reduce((s, t) => s + aNumero(t.monto), 0);
+  return { actual: {
+    anio, mes, nombreMes: nombreDelMes(anio, mes), ingresos, egresos,
+    balance: redondearMonto(ingresos - egresos - impuestoSeparado),
+    saldoInicial: redondearMonto(finanzas.cuentas.filter(c => !c.excluida_disponible).reduce((s, c) => s + c.saldoInicial, 0)),
+    saldoTotalDisponible: finanzas.disponible, totalesEfectivo: porMetodo("efectivo"), totalesTarjeta: porMetodo("tarjeta"),
+    transferencias: traspasosDelMes, egresosFijos: totales.egresosFijos, egresosVariables: totales.egresosVariables,
+    egresosPorCategoria: totales.egresosPorCategoria, ingresosPorCliente: totales.ingresosPorCliente,
+    recurrentesCobrados: totales.recurrentesCobrados, transacciones: delMes, totalTransaccionesMes: delMes.length,
+    finanzas,
+  } };
 }
 
 // ─────────────────────────────────────────────

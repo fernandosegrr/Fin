@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { esFechaISO, hoyEnMexico, mesAnterior, primerDiaDelMes, rangoDelMes } from "@/lib/dates";
 import { aNumero, redondearMonto } from "@/lib/format";
 import { traerTodasLasFilas } from "@/lib/supabase/paginar";
-import { exigirUsuario, exigirCategoriaDelUsuario } from "@/lib/dashboard/shared";
+import { exigirUsuario } from "@/lib/dashboard/shared";
 import type { Categoria, Presupuesto, PresupuestoConGasto, Transaccion } from "@/lib/types";
 
 // PRESUPUESTOS
@@ -39,21 +39,23 @@ async function cargarPresupuestos(
   const rango = rangoDelMes(anio, mes);
 
   const categoriasEgresoPromise = categoriasDisponibles
-    ? Promise.resolve(categoriasDisponibles.filter((c) => c.tipo === "egreso"))
+    ? Promise.resolve(categoriasDisponibles.filter((c) => c.tipo === "egreso" && !c.archivada && (!c.naturaleza || c.naturaleza === "egreso")))
     : (async () => {
-        const { data, error } = await supabase.from("categorias").select("*").eq("tipo", "egreso").order("nombre");
+        const { data, error } = await supabase.from("categorias").select("*").eq("tipo", "egreso").eq("archivada", false).order("nombre");
         if (error) throw new Error(`No se pudieron cargar las categorías del presupuesto: ${error.message}`, { cause: error });
-        return (data ?? []) as Categoria[];
+        return ((data ?? []) as Categoria[]).filter(c => !c.naturaleza || c.naturaleza === "egreso");
       })();
 
   const [categoriasEgreso, resPresupuestos, transacciones] = await Promise.all([
     categoriasEgresoPromise,
     supabase.from("presupuestos").select("*").eq("mes", mesActualISO),
-    traerTodasLasFilas<Pick<Transaccion, "categoria_id" | "monto">>(
+    traerTodasLasFilas<Pick<Transaccion, "categoria_id" | "monto" | "naturaleza">>(
       (desde, hasta) =>
         supabase
           .from("transacciones")
-          .select("categoria_id, monto")
+          .select("categoria_id, monto, naturaleza")
+          .is("eliminado_en", null)
+          .in("naturaleza", ["egreso", "reembolso"])
           .gte("fecha", rango.inicio)
           .lt("fecha", rango.finExclusivo)
           .range(desde, hasta),
@@ -63,13 +65,20 @@ async function cargarPresupuestos(
 
   if (resPresupuestos.error) throw new Error(`No se pudieron cargar los presupuestos: ${resPresupuestos.error.message}`, { cause: resPresupuestos.error });
 
-  const presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
+  let presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
+  if (!presupuestos.length && anio === hoy.anio && mes === hoy.mes) {
+    const copia = await supabase.rpc("copiar_presupuestos_vigentes", { p_mes: mesActualISO });
+    if (copia.error) throw errorDeBaseDatos(copia.error);
+    const lectura = await supabase.from("presupuestos").select("*").eq("mes", mesActualISO);
+    if (lectura.error) throw errorDeBaseDatos(lectura.error);
+    presupuestos = (lectura.data ?? []) as Presupuesto[];
+  }
 
   const gastoPorCategoria = new Map<string, number>();
   for (const t of transacciones) {
     gastoPorCategoria.set(
       t.categoria_id,
-      redondearMonto((gastoPorCategoria.get(t.categoria_id) ?? 0) + aNumero(t.monto)),
+      redondearMonto((gastoPorCategoria.get(t.categoria_id) ?? 0) + (t.naturaleza === "reembolso" ? -1 : 1) * aNumero(t.monto)),
     );
   }
   const presupuestoPorCategoria = new Map(presupuestos.map((p) => [p.categoria_id, p]));
@@ -81,57 +90,8 @@ async function cargarPresupuestos(
   }));
 }
 
-export async function guardarPresupuesto(
-  categoria_id: string,
-  monto_limite: number,
-  mesISO: string,
-): Promise<void> {
-  if (!categoria_id) throw new Error("Selecciona una categoría.");
-  if (!esFechaISO(mesISO) || !mesISO.endsWith("-01")) {
-    throw new Error("El mes del presupuesto no es válido.");
-  }
-
-  const supabase = await createClient();
-  const user = await exigirUsuario(supabase);
-  await exigirCategoriaDelUsuario(supabase, categoria_id);
-
-  if (!Number.isFinite(monto_limite) || monto_limite <= 0) {
-    const { error } = await supabase
-      .from("presupuestos")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("categoria_id", categoria_id)
-      .eq("mes", mesISO);
-    if (error) throw errorDeBaseDatos(error);
-  } else {
-    const limite = redondearMonto(monto_limite);
-    const { data: existente, error: errorBusqueda } = await supabase
-      .from("presupuestos")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("categoria_id", categoria_id)
-      .eq("mes", mesISO)
-      .maybeSingle();
-    if (errorBusqueda) throw errorDeBaseDatos(errorBusqueda);
-
-    if (existente) {
-      const { error } = await supabase
-        .from("presupuestos")
-        .update({ monto_limite: limite })
-        .eq("id", existente.id);
-      if (error) throw errorDeBaseDatos(error);
-    } else {
-      const { error } = await supabase.from("presupuestos").insert({
-        user_id: user.id,
-        categoria_id,
-        monto_limite: limite,
-        mes: mesISO,
-      });
-      if (error) throw errorDeBaseDatos(error);
-    }
-  }
-
-  revalidatePath("/dashboard");
+export async function guardarPresupuesto(categoria_id: string, monto_limite: number, mesISO: string): Promise<void> {
+  return guardarPresupuestosMultiples(mesISO, [{ categoria_id, monto_limite }]);
 }
 
 export interface PresupuestoEntrada {
@@ -143,55 +103,13 @@ export interface PresupuestoEntrada {
  * Guarda o elimina múltiples presupuestos en una sola petición y un solo revalidatePath.
  * Evita disparar N Server Actions simultáneas desde el cliente.
  */
-export async function guardarPresupuestosMultiples(
-  mesISO: string,
-  presupuestos: PresupuestoEntrada[],
-): Promise<void> {
-  if (!esFechaISO(mesISO) || !mesISO.endsWith("-01")) {
-    throw new Error("El mes del presupuesto no es válido.");
-  }
-  if (!Array.isArray(presupuestos) || presupuestos.length === 0) {
-    return;
-  }
-
+export async function guardarPresupuestosMultiples(mesISO: string, presupuestos: PresupuestoEntrada[]): Promise<void> {
+  if (!esFechaISO(mesISO) || !mesISO.endsWith("-01")) throw new Error("El mes del presupuesto no es válido.");
+  if (!Array.isArray(presupuestos) || !presupuestos.length) return;
+  if (presupuestos.some(p => !p.categoria_id || !Number.isFinite(Number(p.monto_limite)))) throw new Error("Los límites no son válidos.");
   const supabase = await createClient();
-  const user = await exigirUsuario(supabase);
-
-  const aEliminar: string[] = [];
-  const aGuardar: { user_id: string; categoria_id: string; monto_limite: number; mes: string }[] = [];
-
-  for (const item of presupuestos) {
-    if (!item.categoria_id) continue;
-    const monto = Number(item.monto_limite);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      aEliminar.push(item.categoria_id);
-    } else {
-      aGuardar.push({
-        user_id: user.id,
-        categoria_id: item.categoria_id,
-        monto_limite: redondearMonto(monto),
-        mes: mesISO,
-      });
-    }
-  }
-
-  if (aEliminar.length > 0) {
-    const { error } = await supabase
-      .from("presupuestos")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("mes", mesISO)
-      .in("categoria_id", aEliminar);
-    if (error) throw errorDeBaseDatos(error);
-  }
-
-  if (aGuardar.length > 0) {
-    const { error } = await supabase
-      .from("presupuestos")
-      .upsert(aGuardar, { onConflict: "user_id, categoria_id, mes" });
-    if (error) throw errorDeBaseDatos(error);
-  }
-
+  const { error } = await supabase.rpc("guardar_presupuestos_financieros", { p_mes: mesISO, p_limites: presupuestos.map(p => ({ categoria_id: p.categoria_id, monto_limite: redondearMonto(Number(p.monto_limite)) })) });
+  if (error) throw errorDeBaseDatos(error);
   revalidatePath("/dashboard");
 }
 

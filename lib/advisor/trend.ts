@@ -4,6 +4,7 @@ import { traerTodasLasFilas } from "@/lib/supabase/paginar";
 import { MESES_TENDENCIA } from "./config";
 import type { SupabaseServerClient } from "./types";
 import type { TipoCategoria } from "@/lib/types";
+import type { NaturalezaMovimiento } from "@/lib/finance/types";
 
 export interface PuntoTendenciaMensual {
   nombreMes: string;
@@ -11,7 +12,7 @@ export interface PuntoTendenciaMensual {
   egresos: number;
 }
 
-type FilaTendencia = { monto: number; fecha: string; categoria: { tipo: TipoCategoria } | null };
+type FilaTendencia = { monto: number; fecha: string; naturaleza?: NaturalezaMovimiento; categoria: { tipo: TipoCategoria } | null };
 
 /**
  * Últimos `MESES_TENDENCIA` meses TERMINANDO en el mes que el usuario tiene
@@ -34,7 +35,8 @@ export async function obtenerTendenciaMensual(
     (desde, hasta) =>
       supabase
         .from("transacciones")
-        .select("monto, fecha, categoria:categorias(tipo)")
+        .select("monto, fecha, naturaleza, categoria:categorias(tipo)")
+        .is("eliminado_en", null)
         .gte("fecha", inicio)
         .lt("fecha", finExclusivo)
         .order("fecha", { ascending: true })
@@ -49,8 +51,10 @@ export async function obtenerTendenciaMensual(
     if (!buckets.has(clave)) buckets.set(clave, { ingresos: 0, egresos: 0 });
     const b = buckets.get(clave)!;
     const monto = aNumero(fila.monto);
-    if (fila.categoria?.tipo === "ingreso") b.ingresos += monto;
-    else if (fila.categoria?.tipo === "egreso") b.egresos += monto;
+    const naturaleza = fila.naturaleza ?? fila.categoria?.tipo;
+    if (["ingreso", "apoyo", "rendimiento"].includes(naturaleza || "")) b.ingresos += monto;
+    else if (naturaleza === "egreso") b.egresos += monto;
+    else if (naturaleza === "reembolso") b.egresos -= monto;
   }
 
   // Incluye meses en cero: si no, el asesor ve "3 meses" cuando en realidad

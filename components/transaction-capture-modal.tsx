@@ -6,6 +6,8 @@ import { CategoryManagerModal } from "./category-manager-modal";
 import type { Categoria, Cliente, TransaccionConCategoria } from "@/lib/types";
 import { useTransactionForm } from "./transactions/use-transaction-form";
 import type { DatosNuevaTransaccion } from "./transactions/types";
+import type { CuentaFinanciera } from "@/lib/finance/types";
+import { AccountTransactionForm } from "./finance/transaction-form";
 
 export type { DatosNuevaTransaccion } from "./transactions/types";
 
@@ -18,9 +20,16 @@ interface Props {
   onEnviar: (datos: DatosNuevaTransaccion) => void;
   onEliminar?: (id: string) => void;
   onCategoriasCambiadas?: () => void;
+  cuentas?: CuentaFinanciera[];
+  onGuardado?: () => void;
 }
 
 export function TransactionCaptureModal(props: Props) {
+  if (props.cuentas?.length) return props.abierto ? <AccountTransactionForm categorias={props.categorias} clientes={props.clientes ?? []} cuentas={props.cuentas} transaccion={props.transaccionEditar} onCerrar={props.onCerrar} onGuardado={props.onGuardado} /> : null;
+  return <LegacyTransactionCaptureModal {...props} />;
+}
+
+function LegacyTransactionCaptureModal(props: Props) {
   const { categorias, clientes = [], abierto, onCerrar, onCategoriasCambiadas } = props;
   const {
     tipo, montoTexto, setMontoTexto, categoriaId, setCategoriaId, descripcion, setDescripcion,

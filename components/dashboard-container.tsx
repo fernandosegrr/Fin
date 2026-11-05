@@ -15,6 +15,7 @@ import { useDashboardData, type DashboardInitialData } from "./dashboard/use-das
 import { useDashboardRealtime } from "./dashboard/use-dashboard-realtime";
 import { HistorialModal } from "@/components/historial-modal";
 import { DashboardContent } from "./dashboard/dashboard-content";
+import type { FiltrosLibro } from "@/lib/dashboard/ledger";
 
 export function DashboardContainer({
   initialBalance,
@@ -27,6 +28,7 @@ export function DashboardContainer({
   const [tabActiva, setTabActiva] = useState<TabId>("inicio");
   const [asesorVisitado, setAsesorVisitado] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [filtrosHistorial, setFiltrosHistorial] = useState<FiltrosLibro>({});
   const data = useDashboardData({
     initialBalance,
     initialPresupuestos,
@@ -69,13 +71,14 @@ export function DashboardContainer({
   }
 
   const section = sections.find((item) => item.id === tabActiva)!;
+  function verHistorial(filtros: FiltrosLibro = {}) { setFiltrosHistorial(filtros); setHistorialAbierto(true); }
   function cambiarTab(tab: TabId) {
     if (tab === "asesor") setAsesorVisitado(true);
     setTabActiva(tab);
   }
 
   return (
-    <main className="dashboard-shell">
+    <main className={`dashboard-shell${tabActiva === "asesor" ? " dashboard-shell--advisor" : ""}`}>
       <a href="#contenido" className="skip-link">Saltar al contenido</a>
       <DashboardNavigation active={tabActiva} onChange={cambiarTab} />
       {/* Toast Banner Flotante con animación */}
@@ -128,7 +131,7 @@ export function DashboardContainer({
             className="!p-2"
             title="Buscar en todo el historial"
             aria-label="Buscar en todo el historial"
-            onClick={() => setHistorialAbierto(true)}
+            onClick={() => verHistorial()}
           >
             <Search className="h-4 w-4 text-[#5E7165] hover:text-[#286F50]" />
           </GlowButton>
@@ -136,7 +139,9 @@ export function DashboardContainer({
             anio={balance.actual.anio}
             mes={balance.actual.mes}
             nombreMes={balance.actual.nombreMes}
+            cuentas={balance.actual.finanzas?.cuentas}
           />
+          {!!balance.actual.finanzas?.pendientes && <button type="button" onClick={() => verHistorial({ soloRevision: true })} className="finance-action !px-2 !py-1.5" aria-label={`Revisar ${balance.actual.finanzas.pendientes} movimientos`}><span className="hidden sm:inline">Por revisar</span> {balance.actual.finanzas.pendientes}</button>}
           <form action={signOut}>
             <GlowButton variant="ghost" type="submit" className="!p-2" title="Cerrar sesión" aria-label="Cerrar sesión">
               <LogOut className="h-4 w-4 text-[#5E7165] hover:text-[#AA524A]" />
@@ -164,10 +169,12 @@ export function DashboardContainer({
         asesorVisitado={asesorVisitado}
         data={data}
         registrarGastoRecurrente={registrarGastoRecurrente}
+        onCambiarTab={cambiarTab}
+        onVerDetalle={verHistorial}
       />
 
       {/* Navegación por Pestañas Inferior (Bottom Nav Bar) */}
-      <HistorialModal abierto={historialAbierto} onCerrar={() => setHistorialAbierto(false)} />
+      <HistorialModal abierto={historialAbierto} onCerrar={() => setHistorialAbierto(false)} inicial={filtrosHistorial} cuentas={balance.actual.finanzas?.cuentas} categorias={data.categorias} clientes={data.clientes} onCambio={recargarDatos} />
 
       <BottomNavigationBar
         tabActiva={tabActiva}

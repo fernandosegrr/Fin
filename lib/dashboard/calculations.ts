@@ -1,5 +1,7 @@
 import { aNumero, redondearMonto } from "@/lib/format";
 import type { EgresoPorCategoria, IngresoPorCliente, GrupoCategoria, MetodoPago, TipoCategoria } from "@/lib/types";
+import { naturalezaDe, signoMovimiento } from "@/lib/finance/ledger";
+import type { NaturalezaMovimiento } from "@/lib/finance/types";
 
 /** Fila mínima para agregar totales: es lo que seleccionan las consultas SIN límite de filas. */
 export type FilaParaTotales = {
@@ -9,6 +11,8 @@ export type FilaParaTotales = {
   cliente_id?: string | null;
   categoria: { id: string; nombre: string; tipo: TipoCategoria; grupo: GrupoCategoria | null } | null;
   cliente?: { id: string; nombre: string } | null;
+  naturaleza?: NaturalezaMovimiento | null;
+  eliminado_en?: string | null;
 };
 
 export type TotalesCalculados = {
@@ -25,10 +29,8 @@ export type TotalesCalculados = {
 
 /**
  * Agrega TODO lo que la UI necesita del mes en una sola pasada sobre las filas
- * sin límite. Los desgloses por categoría / fijo-variable / suscripciones
- * cobradas viven aquí y no en los componentes a propósito: en el cliente solo
- * está disponible la lista recortada a 200 filas, así que calcularlos allá
- * daba números que no cuadraban con los totales en meses con mucho movimiento.
+ * sin límite. Categorías, fijo/variable y recurrentes se agregan antes de
+ * paginar la presentación, para que todas las vistas compartan los totales.
  */
 export function calcularTotalesDetallados(filas: FilaParaTotales[]): TotalesCalculados {
   let ingresos = 0;
@@ -43,41 +45,54 @@ export function calcularTotalesDetallados(filas: FilaParaTotales[]): TotalesCalc
   const recurrentesCobrados = new Set<string>();
 
   for (const fila of filas) {
+    if (fila.eliminado_en) continue;
     if (fila.gasto_recurrente_id) recurrentesCobrados.add(fila.gasto_recurrente_id);
 
     const monto = aNumero(fila.monto);
     const esEfectivo = fila.metodo_pago === "efectivo";
-    if (fila.categoria?.tipo === "ingreso") {
+    const naturaleza = naturalezaDe(fila);
+    const esIngreso = ["ingreso", "apoyo", "rendimiento"].includes(naturaleza);
+    const esGasto = naturaleza === "egreso" || naturaleza === "reembolso";
+    const montoCategoria = naturaleza === "reembolso" ? -monto : monto;
+    if (esIngreso) {
       ingresos += monto;
       if (esEfectivo) efectivo.ingresos += monto;
       else tarjeta.ingresos += monto;
 
+      if (naturaleza !== "ingreso") continue;
       const clienteId = fila.cliente_id ?? fila.cliente?.id ?? "";
       const nombreCliente = fila.cliente?.nombre?.trim() || "Sin cliente";
       const claveCliente = clienteId || "__sin__";
       const acumCliente = porCliente.get(claveCliente);
       if (acumCliente) acumCliente.monto += monto;
       else porCliente.set(claveCliente, { cliente_id: clienteId || null, nombre: nombreCliente, monto });
-    } else if (fila.categoria?.tipo === "egreso") {
-      egresos += monto;
-      if (esEfectivo) efectivo.egresos += monto;
-      else tarjeta.egresos += monto;
+    } else if (esGasto && fila.categoria) {
+      egresos += montoCategoria;
+      if (esEfectivo) efectivo.egresos += montoCategoria;
+      else tarjeta.egresos += montoCategoria;
+      // La distribución de consumo describe compras; el reembolso se muestra aparte.
+      if (naturaleza === "reembolso") continue;
 
-      if (fila.categoria.grupo === "fijo") egresosFijos += monto;
-      else if (fila.categoria.grupo === "variable") egresosVariables += monto;
+      if (fila.categoria.grupo === "fijo") egresosFijos += montoCategoria;
+      else if (fila.categoria.grupo === "variable") egresosVariables += montoCategoria;
 
       const acumulado = porCategoria.get(fila.categoria.id);
-      if (acumulado) acumulado.monto += monto;
+      if (acumulado) acumulado.monto += montoCategoria;
       else porCategoria.set(fila.categoria.id, {
         categoria_id: fila.categoria.id,
         nombre: fila.categoria.nombre,
-        monto,
+        monto: montoCategoria,
       });
+    } else if (naturaleza !== "traspaso") {
+      // El flujo físico se refleja en cuentas; no se presenta como ingreso ganado o consumo.
+      const delta = signoMovimiento(fila) * monto;
+      if (esEfectivo) efectivo.neto += delta;
+      else tarjeta.neto += delta;
     }
   }
 
-  efectivo.neto = efectivo.ingresos - efectivo.egresos;
-  tarjeta.neto = tarjeta.ingresos - tarjeta.egresos;
+  efectivo.neto += efectivo.ingresos - efectivo.egresos;
+  tarjeta.neto += tarjeta.ingresos - tarjeta.egresos;
 
   return {
     ingresos: redondearMonto(ingresos),

@@ -318,7 +318,7 @@ export function RecurringExpenses(props: RecurringExpensesProps) {
                   >
                     <option value="">Selecciona una categoría</option>
                     {categorias
-                      .filter((c) => c.tipo === "egreso")
+                      .filter((c) => c.tipo === "egreso" && !c.archivada && (!c.naturaleza || c.naturaleza === "egreso"))
                       .map((c) => (
                         <option key={c.id} value={c.id} className="bg-white text-[#1C3028]">
                           {c.nombre} {c.grupo ? `(${c.grupo})` : ""}

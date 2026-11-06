@@ -232,7 +232,7 @@ export function useRecurringExpenses({
     }
   }
 
-  const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso");
+  const categoriaEgresoDefault = categorias.find((c) => c.tipo === "egreso" && !c.archivada && (!c.naturaleza || c.naturaleza === "egreso"));
   const totalProgramado = recurrentes.reduce((sum, rec) => sum + Number(rec.monto), 0);
   const totalRegistrado = recurrentes.reduce((sum, rec) => sum + (cobradosEsteMes.has(rec.id) || registrados.has(`${anio}-${mes}-${rec.id}`) ? Number(rec.monto) : 0), 0);
 

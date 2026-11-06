@@ -4,7 +4,7 @@ Fecha: 5 de noviembre de 2026. Zona horaria: America/Mexico_City.
 
 Objetivo: que la aplicación explique cuánto entra por trabajo, cuánto se consume, cuánto se conserva o invierte, dónde está el dinero y qué decisiones concretas pueden mejorar las finanzas. El alcance comprende todo el historial de la cuenta indicada por el usuario, el asistente y las funciones generales de la app.
 
-Este documento reúne los hallazgos iniciales y el plan autorizado. La implementación está preparada en la rama `codex/financial-audit-complete`; el lote completo se ensayó con una copia privada en PostgreSQL. Producción continúa sin modificar hasta obtener acceso de administración a Supabase. Las propuestas individuales y respaldos quedan fuera del repositorio.
+Este documento reúne los hallazgos iniciales y el plan autorizado. El usuario instaló el esquema y la reclasificación se aplicó en producción el 5 de noviembre de 2026, después de ensayarla con una copia privada en PostgreSQL. Se incorporó también una aportación posterior del 10% mediante un lote separado. Las propuestas individuales y respaldos quedan fuera del repositorio. La publicación de la interfaz está en verificación.
 
 ## 1. Base comprobada
 
@@ -185,7 +185,7 @@ Pasaron TypeScript, ESLint, la compilación de producción y las pruebas del lib
 
 El ensayo privado verificó aplicación atómica, reintento sin duplicados, cobertura de los identificadores originales, saldos por cuenta, búsqueda completa, traslado del ahorro, copia del presupuesto al mes siguiente y reversión completa. Se probaron aislamiento por usuario, rechazo de referencias ajenas, protección del registro de auditoría, fusión y restauración de categorías/presupuestos, y conflicto frente a cambios posteriores.
 
-La prueba visual de teclado móvil sigue pendiente: el control de Chrome no pudo determinar con certeza la URL y se detuvo. El usuario prefirió ejecutar el SQL desde su celular en vez de conectar el complemento. Se entregó un SQL transaccional listo para pegar, sin pedir contraseñas ni tokens. Aún debe comprobarse su ejecución. No se ha aplicado el lote a producción ni se ha publicado esta rama sobre la dirección habitual.
+El usuario ejecutó el SQL desde su celular. Se comprobó la versión del esquema por API y se aplicó el lote personal mediante una sesión temporal del propietario, con RLS y respaldo antes/después. Se verificaron los 290 identificadores originales, 292 transacciones resultantes y diez traspasos. El usuario registró después dos ingresos de $500 y una aportación de $100: se conservaron ambos ingresos y se reclasificó únicamente la aportación como traspaso al ahorro. La prueba visual de teclado móvil sigue pendiente; el control anterior de Chrome no pudo determinar con certeza la URL y se detuvo.
 
 ## 8. Resultado financiero del ensayo
 
@@ -203,6 +203,8 @@ La prueba visual de teclado móvil sigue pendiente: el control de Chrome no pudo
 | Disponible según registros, sin ahorro | $6,590.02 |
 | Ahorro Revolut | $1,046.40 |
 | Patrimonio según registros | $7,636.42 |
+
+Después de los dos ingresos nuevos por $1,000 y su aportación del 10% ($100), los ingresos históricos ascienden a $43,246.59, el disponible registrado a $7,490.02, el ahorro a $1,146.40 y el patrimonio a $8,636.42. Los importes de la tabla conservan el corte original de la auditoría para distinguir ambos lotes.
 
 Los $750 recibidos del proyecto escolar son aportaciones/reembolsos. El cargo duplicado de Diri conserva su salida real y una etiqueta del cupón; no se crea un reembolso en efectivo. La salida de $500 al familiar es independiente del préstamo recibido. Los $259 aproximados del proyecto y el resto de $76.97 del movimiento mixto quedan señalados para revisión.
 

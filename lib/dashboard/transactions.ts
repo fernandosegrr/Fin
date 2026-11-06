@@ -46,7 +46,9 @@ export async function crearTransaccion(input: NuevaTransaccion): Promise<void> {
   const supabase = await createClient();
   const user = await exigirUsuario(supabase);
   const categoria = await exigirCategoriaDelUsuario(supabase, input.categoria_id);
+  if (categoria.archivada) throw new Error("Esta categoría fue archivada. Actualiza la lista y elige una categoría activa.");
   const naturaleza = input.naturaleza ?? categoria.naturaleza ?? categoria.tipo;
+  if (categoria.naturaleza === "traspaso" && naturaleza !== "traspaso") throw new Error("El ahorro se registra como traspaso. Selecciona una cuenta de destino.");
   if (!(NATURALEZAS as readonly string[]).includes(naturaleza)) throw new Error("El tipo de movimiento no es válido.");
   if (naturaleza === "traspaso") {
     if (!input.cuenta_destino_id || input.cuenta_destino_id === cuenta?.id) throw new Error("Selecciona otra cuenta de destino.");

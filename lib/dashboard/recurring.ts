@@ -45,8 +45,8 @@ export async function crearGastoRecurrente(input: NuevoGastoRecurrente): Promise
   const supabase = await createClient();
   const user = await exigirUsuario(supabase);
   const categoria = await exigirCategoriaDelUsuario(supabase, input.categoria_id);
-  if (categoria.tipo !== "egreso") {
-    throw new Error("Las suscripciones deben usarse con una categoría de egreso.");
+  if (categoria.tipo !== "egreso" || categoria.archivada || (categoria.naturaleza && categoria.naturaleza !== "egreso")) {
+    throw new Error("Selecciona una categoría activa de consumo para la suscripción.");
   }
 
   const { error } = await supabase.from("gastos_recurrentes").insert({
@@ -78,8 +78,8 @@ export async function actualizarGastoRecurrente(
   const supabase = await createClient();
   const user = await exigirUsuario(supabase);
   const categoria = await exigirCategoriaDelUsuario(supabase, input.categoria_id);
-  if (categoria.tipo !== "egreso") {
-    throw new Error("Las suscripciones deben usarse con una categoría de egreso.");
+  if (categoria.tipo !== "egreso" || categoria.archivada || (categoria.naturaleza && categoria.naturaleza !== "egreso")) {
+    throw new Error("Selecciona una categoría activa de consumo para la suscripción.");
   }
 
   const { error } = await supabase

@@ -106,6 +106,7 @@ html.advisor-open, .advisor-open body { overflow: hidden; overscroll-behavior: n
 .dashboard-shell--advisor #contenido { flex: 1; min-height: 0; display: flex; }
 .advisor-host { display: flex; flex: 1; min-height: 0; }
 .advisor-panel { width: 100%; flex: 1; min-height: 0; }
+.advisor-panel > div:first-child { flex-shrink: 0; }
 .advisor-messages { overflow-anchor: none; scrollbar-gutter: stable; }
 @media (max-width: 1023px) {
   .dashboard-shell--advisor .page-heading > div:first-child { display: none; }
@@ -113,6 +114,8 @@ html.advisor-open, .advisor-open body { overflow: hidden; overscroll-behavior: n
   .advisor-keyboard-open .dashboard-shell--advisor .page-heading,
   .advisor-keyboard-open .dashboard-shell--advisor nav[aria-label="Navegación móvil"] { display: none; }
   .advisor-keyboard-open .dashboard-shell--advisor { padding-bottom: 0; }
+  .advisor-keyboard-open .advisor-panel > div:first-child { padding-top: 8px; padding-bottom: 8px; }
+  .advisor-keyboard-open .advisor-panel > div:first-child p { display: none; }
 }
 
 .dashboard-shell {

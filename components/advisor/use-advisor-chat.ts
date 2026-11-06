@@ -71,21 +71,34 @@ export function useAdvisorChat(anio: number, mes: number, onDatosCambiados?: () 
     document.documentElement.classList.add("advisor-open");
     window.scrollTo({ top: 0 });
     const viewport = window.visualViewport;
+    let altoSinTeclado = viewport?.height ?? window.innerHeight;
     function ajustarViewport() {
       const el = panelRef.current; if (!el) return;
-      const teclado = Boolean(viewport && viewport.height < window.innerHeight * .78);
-      document.documentElement.classList.toggle("advisor-keyboard-open", teclado);
       const alto = viewport?.height ?? window.innerHeight;
+      const entradaActiva = el.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
+      if (!entradaActiva) altoSinTeclado = Math.max(altoSinTeclado, alto);
+      // resizes-content también reduce innerHeight: comparar sólo esas dos
+      // alturas no detecta el teclado en Chrome. Conservar la altura sin foco.
+      const teclado = Boolean(entradaActiva && (altoSinTeclado - alto > 120 || (viewport && viewport.height < window.innerHeight * .78)));
+      document.documentElement.classList.toggle("advisor-keyboard-open", teclado);
       document.documentElement.style.setProperty("--advisor-viewport-height", `${alto}px`);
       const top = el.getBoundingClientRect().top - (viewport?.offsetTop ?? 0);
       const nav = !teclado && window.innerWidth < 1024 ? 86 : 20;
       el.style.maxHeight = `${Math.max(180, alto - Math.max(0, top) - nav)}px`;
     }
     ajustarViewport();
+    const panel = panelRef.current;
+    const ajustarFoco = () => requestAnimationFrame(ajustarViewport);
+    panel?.addEventListener("focusin", ajustarFoco);
+    panel?.addEventListener("focusout", ajustarFoco);
     viewport?.addEventListener("resize", ajustarViewport);
+    viewport?.addEventListener("scroll", ajustarViewport);
     window.addEventListener("resize", ajustarViewport);
     return () => {
       viewport?.removeEventListener("resize", ajustarViewport);
+      viewport?.removeEventListener("scroll", ajustarViewport);
+      panel?.removeEventListener("focusin", ajustarFoco);
+      panel?.removeEventListener("focusout", ajustarFoco);
       window.removeEventListener("resize", ajustarViewport);
       document.documentElement.classList.remove("advisor-keyboard-open");
       document.documentElement.classList.remove("advisor-open");

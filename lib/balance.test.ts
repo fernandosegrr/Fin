@@ -51,3 +51,14 @@ test("un reembolso afecta el balance y no distorsiona la distribución del consu
   assert.equal(total.egresosFijos + total.egresosVariables, 550);
   assert.deepEqual(total.egresosPorCategoria.map(c => c.monto), [300, 250]);
 });
+
+test("agrupar gym y salud conserva el cobro recurrente como fijo y los suplementos como variables", () => {
+  const categoria = { id: "salud", nombre: "Gym y salud", tipo: "egreso" as const, grupo: "variable" as const };
+  const total = calcularTotalesDetallados([
+    { monto: 600, categoria, naturaleza: "egreso", gasto_recurrente_id: "gym" },
+    { monto: 350.1, categoria, naturaleza: "egreso" },
+  ]);
+  assert.equal(total.egresosFijos, 600);
+  assert.equal(total.egresosVariables, 350.1);
+  assert.deepEqual(total.egresosPorCategoria.map(c => c.monto), [950.1]);
+});

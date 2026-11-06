@@ -11,6 +11,7 @@ import { sugerirCategoria } from "@/lib/finance/classification";
 import { NATURALEZAS, NOMBRES_NATURALEZA, type CuentaFinanciera, type NaturalezaMovimiento } from "@/lib/finance/types";
 import type { Categoria, Cliente, TransaccionConCategoria } from "@/lib/types";
 import { useEscapeKey } from "@/lib/use-escape-key";
+import { destinoDelGasto, etiquetasConDestino, ETIQUETAS_DESTINO, DESTINOS_GASTO, NOMBRES_DESTINO, type DestinoGasto } from "@/lib/finance/spending";
 
 const campo = "mt-1 w-full rounded-xl border border-[#DCE4DB] bg-[#F7F9F5] px-3 py-2.5 text-sm focus:outline-none focus:border-[#286F50]";
 interface Props { categorias: Categoria[]; clientes: Cliente[]; cuentas: CuentaFinanciera[]; transaccion?: TransaccionConCategoria | null; onCerrar: () => void; onGuardado?: () => void; }
@@ -25,6 +26,7 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
   const [fecha, setFecha] = useState(t?.fecha || hoyISOEnMexico());
   const [clienteId, setClienteId] = useState(t?.cliente_id || ""); const [clienteNuevo, setClienteNuevo] = useState("");
   const [etiquetas, setEtiquetas] = useState(t?.etiquetas?.join(", ") || "");
+  const [paraQuien, setParaQuien] = useState<DestinoGasto>(t ? destinoDelGasto(t) : "personal");
   const [revision, setRevision] = useState(Boolean(t?.requiere_revision));
   const [motivo, setMotivo] = useState(t?.motivo_revision || "");
   const [prestamos, setPrestamos] = useState<Awaited<ReturnType<typeof obtenerDeudasPendientes>>>([]);
@@ -44,6 +46,9 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
     setCategoriaId(id); manual.current = Boolean(id);
     const categoria = todas.find(c => c.id === id);
     if (categoria?.naturaleza) setNaturaleza(categoria.naturaleza);
+    if (categoria?.nombre === "Salidas en pareja") setParaQuien("pareja");
+    else if (categoria?.naturaleza === "egreso_pendiente") setParaQuien("sin_clasificar");
+    else if (categoria?.nombre === "Familia y regalos") setParaQuien("otros");
   }
   function concepto(valor: string) {
     setDescripcion(valor);
@@ -51,6 +56,7 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
       const sugerida = sugerirCategoria(valor, todas, tipo);
       setCategoriaId(sugerida?.id || "");
       if (sugerida?.naturaleza) setNaturaleza(sugerida.naturaleza);
+      if (sugerida?.nombre === "Salidas en pareja") setParaQuien("pareja");
     }
   }
   async function guardar(e: React.FormEvent) {
@@ -67,7 +73,8 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
       let cli = naturaleza === "ingreso" ? clienteId || null : null;
       if (naturaleza === "ingreso" && !cli && clienteNuevo.trim()) cli = (await crearCliente(clienteNuevo.trim())).id;
       const importe = naturaleza === "rendimiento" && !soloNeto ? Math.round((parsearMonto(bruto) - parsearMonto(impuesto)) * 100) / 100 : parsearMonto(monto);
-      const payload = { categoria_id: idCategoria, monto: importe, descripcion: descripcion.trim() || null, fecha, naturaleza, cuenta_id: cuentaId, cuenta_destino_id: naturaleza === "traspaso" ? destino : null, metodo_pago: cuenta.metodo_pago, cliente_id: cli, etiquetas: etiquetas.split(",").map(s => s.trim()).filter(Boolean), requiere_revision: revision, motivo_revision: revision ? motivo.trim() : null, interes_bruto: naturaleza === "rendimiento" && !soloNeto ? parsearMonto(bruto) : null, impuesto_retenido: naturaleza === "rendimiento" && !soloNeto ? parsearMonto(impuesto) : null };
+      const listaEtiquetas = etiquetas.split(",").map(s => s.trim()).filter(Boolean);
+      const payload = { categoria_id: idCategoria, monto: importe, descripcion: descripcion.trim() || null, fecha, naturaleza, cuenta_id: cuentaId, cuenta_destino_id: naturaleza === "traspaso" ? destino : null, metodo_pago: cuenta.metodo_pago, cliente_id: cli, etiquetas: ["egreso", "egreso_pendiente"].includes(naturaleza) ? etiquetasConDestino(listaEtiquetas, paraQuien) : listaEtiquetas, requiere_revision: revision, motivo_revision: revision ? motivo.trim() : null, interes_bruto: naturaleza === "rendimiento" && !soloNeto ? parsearMonto(bruto) : null, impuesto_retenido: naturaleza === "rendimiento" && !soloNeto ? parsearMonto(impuesto) : null };
       const relacionado = naturaleza === "pago_deuda" ? prestamo || null : t?.movimiento_relacionado_id || null;
       const huella = JSON.stringify({ ...payload, movimiento_relacionado_id: relacionado });
       if (solicitud.current.payload !== huella) solicitud.current = { payload: huella, id: crypto.randomUUID() };
@@ -81,7 +88,7 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
       <div role="dialog" aria-modal="true" aria-labelledby="nuevo-movimiento-titulo" className="w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3"><h3 className="font-bold" id="nuevo-movimiento-titulo">{t ? "Editar movimiento" : "Nuevo movimiento"}</h3><button disabled={guardando} aria-label="Cerrar" onClick={onCerrar}><X size={20} /></button></div>
         <form onSubmit={guardar} className="mt-4 space-y-3.5">
-          <label className="block text-xs font-medium">Qué ocurrió<select value={naturaleza} onChange={e => { setNaturaleza(e.target.value as NaturalezaMovimiento); setCategoriaId(""); manual.current = false; }} className={campo}>{NATURALEZAS.map(n => <option value={n} key={n}>{NOMBRES_NATURALEZA[n]}</option>)}</select></label>
+          <label className="block text-xs font-medium">Qué ocurrió<select value={naturaleza} onChange={e => { setNaturaleza(e.target.value as NaturalezaMovimiento); if (e.target.value === "egreso_pendiente") setParaQuien("sin_clasificar"); setCategoriaId(""); manual.current = false; }} className={campo}>{NATURALEZAS.map(n => <option value={n} key={n}>{NOMBRES_NATURALEZA[n]}</option>)}</select></label>
           <label className="block text-xs font-medium">Concepto<input value={descripcion} onChange={e => concepto(e.target.value)} maxLength={500} placeholder="Ej. gasolina, café, proyecto…" className={campo} /></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-xs font-medium">Cuenta<select required value={cuentaId} onChange={e => setCuentaId(e.target.value)} className={campo}><option value="">Selecciona</option>{cuentas.filter(c => !c.archivada || c.id === cuentaId).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label><label className="text-xs font-medium">Fecha<input required type="date" value={fecha} onChange={e => setFecha(e.target.value)} className={campo} /></label></div>
           {naturaleza === "traspaso" && <label className="block text-xs font-medium">Cuenta de destino<select required className={campo} value={destino} onChange={e => setDestino(e.target.value)}>{cuentas.filter(c => !c.archivada && c.id !== cuentaId).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select><span className="text-[#5E7165]">Conserva tu patrimonio y queda separado del consumo.</span></label>}
@@ -90,7 +97,8 @@ export function AccountTransactionForm({ categorias, clientes, cuentas, transacc
           {naturaleza === "rendimiento" && !soloNeto ? <div className="grid grid-cols-2 gap-3"><label className="text-xs font-medium">Interés bruto<input required value={bruto} onChange={e => setBruto(e.target.value)} inputMode="decimal" className={campo} /></label><label className="text-xs font-medium">Retención<input required value={impuesto} onChange={e => setImpuesto(e.target.value)} inputMode="decimal" className={campo} /></label></div> : <label className="block text-xs font-medium">Importe MXN<input required value={monto} onChange={e => setMonto(e.target.value)} inputMode="decimal" placeholder="0.00" className={campo} /></label>}
           <div><div className="flex justify-between items-center"><label htmlFor="movimiento-categoria-v2" className="text-xs font-medium">Categoría</label><button type="button" onClick={() => setCategoriasAbiertas(true)} className="text-xs font-semibold text-[#286F50] inline-flex gap-1 items-center"><Plus size={12} /> Crear</button></div><select id="movimiento-categoria-v2" value={categoriaId} required={["ingreso", "egreso"].includes(naturaleza)} onChange={e => seleccionarCategoria(e.target.value)} className={campo}><option value="">{["ingreso", "egreso"].includes(naturaleza) ? "Selecciona una categoría" : "Automática según el movimiento"}</option>{opciones.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
           {naturaleza === "ingreso" && <><label className="block text-xs font-medium">Cliente / proyecto<select value={clienteId} onChange={e => setClienteId(e.target.value)} className={campo}><option value="">Sin cliente / crear nuevo</option>{clientes.map(c => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select></label>{!clienteId && <input aria-label="Nuevo cliente" placeholder="Nombre de cliente nuevo (opcional)" value={clienteNuevo} onChange={e => setClienteNuevo(e.target.value)} className={campo} />}</>}
-          <label className="block text-xs font-medium">Etiquetas (separadas por coma)<input value={etiquetas} onChange={e => setEtiquetas(e.target.value)} placeholder="En pareja, Escuela…" className={campo} /></label>
+          {["egreso", "egreso_pendiente"].includes(naturaleza) && <fieldset><legend className="text-sm font-medium">¿Para quién fue?</legend><div className="recipient-options">{DESTINOS_GASTO.map(d => <label key={d} className={paraQuien === d ? "is-selected" : ""}><input type="radio" name="destino-gasto" value={d} checked={paraQuien === d} onChange={() => setParaQuien(d)} />{NOMBRES_DESTINO[d]}</label>)}</div><p className="mt-2 text-xs text-[#5E7165]">Así se separan los gastos de pareja y los tuyos en el resumen.</p></fieldset>}
+          <details><summary className="text-sm text-[#5E7165] cursor-pointer py-2">Etiquetas adicionales</summary><label className="block text-xs font-medium">Separadas por coma<input value={etiquetas.split(",").map(e => e.trim()).filter(e => !Object.values(ETIQUETAS_DESTINO).includes(e)).join(", ")} onChange={e => setEtiquetas(e.target.value)} placeholder="Ej. Escuela, Vacaciones…" className={campo} /></label></details>
           <label className="flex gap-2 items-center text-xs"><input type="checkbox" checked={revision} onChange={e => setRevision(e.target.checked)} /> Dejar pendiente de revisión</label>
           {revision && <input aria-label="Qué falta por aclarar" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Qué falta por aclarar" className={campo} />}
           {error && <p role="alert" className="rounded-xl bg-[#FCF0ED] p-3 text-sm text-[#AA524A]">{error}</p>}

@@ -16,15 +16,15 @@ export interface NavigationSection {
 export const sections: readonly NavigationSection[] = [
   {
     id: "inicio",
-    label: "Resumen General",
+    label: "Resumen",
     shortLabel: "Resumen",
-    description: "Tu balance global, metas y movimientos recientes.",
+    description: "Tu dinero y tus gastos, en un vistazo.",
     icon: LayoutDashboard,
   },
-  { id: "cuentas", label: "Cuentas y rendimientos", shortLabel: "Dinero", description: "Tu dinero principal, ahorro, traspasos y ganancias netas.", icon: Wallet },
+  { id: "cuentas", label: "Mis cuentas", shortLabel: "Dinero", description: "Tu dinero principal, ahorro, traspasos y ganancias netas.", icon: Wallet },
   {
     id: "suscripciones",
-    label: "Pagos Recurrentes",
+    label: "Pagos recurrentes",
     shortLabel: "Pagos",
     description: "Controla tus suscripciones y fechas de cobro.",
     icon: Repeat2,
@@ -45,7 +45,7 @@ export const sections: readonly NavigationSection[] = [
   },
   {
     id: "asesor",
-    label: "Asesor Financiero IA",
+    label: "Asesor",
     shortLabel: "Asesor",
     description: "Consultas inteligentes basadas en tus finanzas reales.",
     icon: Sparkles,
@@ -67,7 +67,7 @@ export function DashboardNavigation({
       </div>
 
       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A897D] mt-6 mb-3 px-3">
-        Navegación
+        Tu espacio
       </p>
 
       {/* Lista de navegación principal */}
@@ -80,7 +80,7 @@ export function DashboardNavigation({
               type="button"
               aria-current={isActive ? "page" : undefined}
               onClick={() => onChange(id)}
-              className={`group relative flex w-full items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition-colors duration-200 ${
+              className={`group relative flex w-full items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors duration-200 ${
                 isActive
                   ? "bg-[#E7F1E8] text-[#245C42] border border-[#D0E1D1]"
                   : "text-[#5E7165] hover:text-[#263D33] hover:bg-[#F4F7F2] border border-transparent"
@@ -99,7 +99,7 @@ export function DashboardNavigation({
                 <Icon size={17} />
               </div>
 
-              <span className="truncate">{label}</span>
+              <span>{label}</span>
 
               {isActive ? (
                 <span className="ml-auto flex h-1.5 w-1.5 rounded-full bg-[#245C42]" />
@@ -119,7 +119,7 @@ export function DashboardNavigation({
         <div className="rounded-2xl border border-[#DCE4DB] bg-[#F7F9F5] p-3.5">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 rounded-full bg-[#245C42]" />
-            <span className="text-[11px] font-bold text-[#263D33]">Espacio privado</span>
+            <span className="text-[11px] font-bold text-[#263D33]">Tus finanzas</span>
           </div>
           <p className="mt-1 text-[11px] text-[#5E7165] leading-relaxed">
             Tus números y movimientos, en un mismo lugar.

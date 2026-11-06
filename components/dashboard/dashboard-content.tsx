@@ -7,6 +7,7 @@ import { PresupuestosProgreso } from "@/components/presupuestos-progreso";
 import { TransactionsSection } from "@/components/transactions-section";
 import { RecurringExpenses } from "@/components/recurring-expenses";
 import { MonthInsights } from "@/components/month-insights";
+import { SpendingFocus } from "../finance/spending-focus";
 import { SavingsGoalCard } from "@/components/savings-goal-card";
 import { primerDiaDelMes } from "@/lib/dates";
 import type { RecurringExpensesProps } from "@/components/recurring/use-recurring-expenses";
@@ -43,19 +44,11 @@ export function DashboardContent({ tabActiva, asesorVisitado, data, registrarGas
         {/* Pestaña 1: INICIO (Saldo Total + Movimientos del Mes) */}
         {tabActiva === "inicio" && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <MonthInsights actual={balance.actual} />
-            {margen && balance.actual.finanzas && <section className="finance-card p-4 flex flex-wrap items-center justify-between gap-3" aria-label="Plan para el resto del mes"><div><p className="text-xs font-semibold text-[#5E7165]">Ritmo orientativo para los próximos {Math.min(7, margen.diasRestantes)} días</p><p className="text-2xl font-bold text-[#286F50] mt-1">{formatearMonto(margen.ritmo7Dias)}</p><p className="text-[11px] text-[#5E7165] mt-1">Apartando {formatearMonto(margen.comprometido)} para pagos registrados pendientes y distribuyendo el resto hasta fin de mes.</p></div><button className="finance-action" onClick={() => onCambiarTab?.("presupuestos")}>Revisar mis límites</button></section>}
+            <BalanceResumen actual={balance.actual} onTransferenciaRealizada={recargarDatos} onVerCuentas={() => onCambiarTab?.("cuentas")} />
+            {balance.actual.finanzas?.gastosDestino && <SpendingFocus resumen={balance.actual.finanzas.gastosDestino} nombreMes={balance.actual.nombreMes} />}
             <div className="overview-grid">
-            <BalanceResumen
-              actual={balance.actual}
-              onTransferenciaRealizada={recargarDatos}
-              onVerCuentas={() => onCambiarTab?.("cuentas")}
-            />
-            <SavingsGoalCard
-              meta={meta}
-              saldoActual={balance.actual.finanzas?.ahorro ?? balance.actual.saldoTotalDisponible}
-              onCambio={recargarDatos}
-            />
+              {margen && balance.actual.finanzas && <section className="finance-card planning-card" aria-label="Plan para el resto del mes"><h2>Tu margen para esta semana</h2><p className="planning-amount">{formatearMonto(margen.ritmo7Dias)}</p><p>Orientación para {Math.min(7, margen.diasRestantes)} días, reservando {formatearMonto(margen.comprometido)} para tus pagos pendientes.</p><button className="finance-action mt-4" onClick={() => onCambiarTab?.("presupuestos")}>Revisar presupuestos</button></section>}
+              <SavingsGoalCard meta={meta} saldoActual={balance.actual.finanzas?.ahorro ?? balance.actual.saldoTotalDisponible} onCambio={recargarDatos} />
             </div>
             <TransactionsSection
               // Se llavea con el mes YA CARGADO, no con el solicitado: entre
@@ -94,6 +87,7 @@ export function DashboardContent({ tabActiva, asesorVisitado, data, registrarGas
         {/* Pestaña 3: ESTADÍSTICAS (Métricas + Gráficas de Dona y Flujo) */}
         {tabActiva === "estadisticas" && (
           <div className="space-y-4 animate-in fade-in duration-300">
+            <MonthInsights actual={balance.actual} />
             {balance.actual.finanzas && <section className="finance-card p-5"><p className="eyebrow">DESDE QUE EMPEZASTE A REGISTRAR</p><h3 className="text-3xl font-bold mt-2">{formatearMonto(balance.actual.finanzas.historicoIngresos.total)}</h3><p className="text-xs text-[#5E7165] mt-2">Ingresos históricos hasta el cierre del periodo: trabajo {formatearMonto(balance.actual.finanzas.historicoIngresos.trabajo)}, apoyos {formatearMonto(balance.actual.finanzas.historicoIngresos.apoyos)} y rendimientos {formatearMonto(balance.actual.finanzas.historicoIngresos.rendimientos)}. Préstamos, reembolsos y ajustes se muestran aparte.</p><button className="finance-action mt-3" onClick={() => onVerDetalle?.({ tipo: "ingreso", hasta: periodo.hasta })}>Ver movimientos de ingresos</button></section>}
             <AnalyticsSummary
               egresosFijos={balance.actual.egresosFijos}

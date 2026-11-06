@@ -52,6 +52,7 @@ export type FilaFinanciera = TransaccionConCategoria & {
 };
 
 export interface ResumenFinanciero {
+  gastosDestino?: { mes: import("./spending").ResumenGastosDestino; historico: import("./spending").ResumenGastosDestino };
   estimacionRendimientos?: import("./returns").EstimacionAcumulada;
   cuentas: CuentaConSaldo[];
   disponible: number;

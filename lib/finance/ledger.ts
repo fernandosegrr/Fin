@@ -1,5 +1,6 @@
 import { aNumero } from "@/lib/format";
 import type { CuentaConSaldo, CuentaFinanciera, FilaFinanciera, NaturalezaMovimiento, ResumenFinanciero, TraspasoFinanciero } from "./types";
+import { resumirGastosPorDestino } from "./spending";
 
 export function centavos(valor: unknown): number {
   const n = aNumero(valor);
@@ -101,6 +102,7 @@ export function resumirLibro(
   const deuda = [...prestamos].reduce((s, [id, monto]) => s + Math.max(0, monto - (amortizaciones.get(id) ?? 0)), 0);
   const deudasPendientes = [...prestamos].map(([id, monto]) => { const t = transacciones.find(t => t.id === id)!; return { id, descripcion: t.descripcion || "Préstamo recibido", fecha: t.fecha, recibido: monto / 100, pendiente: Math.max(0, monto - (amortizaciones.get(id) || 0)) / 100 }; }).filter(d => d.pendiente > 0);
   return {
+    gastosDestino: { mes: resumirGastosPorDestino(transacciones, inicio, finExclusivo), historico: resumirGastosPorDestino(transacciones, "2000-01-01", finExclusivo) },
     cuentas: estados, activos: activos / 100, disponible: (activos - ahorro) / 100, ahorro: ahorro / 100,
     deuda: Math.max(0, deuda) / 100, patrimonio: (activos - Math.max(0, deuda)) / 100,
     deudasPendientes,

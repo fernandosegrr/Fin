@@ -106,13 +106,14 @@ export function ExportButton({ anio, mes, nombreMes, cuentas = [] }: Props) {
       disabled={exportando}
       className="!py-1.5 !px-2.5 sm:!px-3.5 !text-xs"
       title="Exportar a Excel"
+      aria-label="Exportar Excel"
     >
       {exportando ? (
         <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
       ) : (
         <Download className="h-4 w-4 shrink-0" />
       )}
-      <span className="hidden sm:inline">Exportar Excel</span>
+      <span>Exportar Excel</span>
     </GlowButton>
   );
 }

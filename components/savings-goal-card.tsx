@@ -27,14 +27,14 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 border border-violet-500/25 text-[#795F84] shrink-0 shadow-sm shadow-violet-500/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#EDF5EF] border border-[#DCE4DB] text-[#286F50] shrink-0 shadow-sm shadow-violet-500/10">
               <Flag className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#795F84] block">
-                Propósito de Ahorro
+              <span className="text-xs font-medium text-[#286F50] block">
+                Meta de ahorro
               </span>
-              <h3 className="text-sm sm:text-base font-bold text-[#1C3028] truncate mt-0.5">
+              <h3 className="text-base font-semibold text-[#1C3028] break-words mt-0.5">
                 {meta ? meta.nombre : "Define tu meta"}
               </h3>
             </div>
@@ -64,7 +64,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
         {meta ? (
           <div className="mt-5">
             <div className="flex items-baseline justify-between">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight tabular-nums text-[#1C3028]">
+              <span className="text-3xl font-semibold tracking-tight tabular-nums text-[#1C3028]">
                 {porcentaje}%
               </span>
               <span className="text-xs font-semibold text-[#5E7165]">
@@ -99,12 +99,12 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
         ) : (
           <div className="mt-4 pt-3 border-t border-[#DCE4DB] text-center">
             <p className="text-xs text-[#5E7165] mb-3">
-              Vincula un objetivo financiero a tu saldo disponible para medir tu avance.
+              Vincula un objetivo a tu ahorro separado para medir tu avance.
             </p>
             <button
               type="button"
               onClick={abrir}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-[#CBD6CA] bg-[#F4F7F2] text-xs font-bold text-[#795F84] hover:border-violet-400/40 hover:bg-violet-500/10 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-dashed border-[#CBD6CA] bg-[#F4F7F2] text-xs font-bold text-[#286F50] hover:border-violet-400/40 hover:bg-violet-500/10 transition-all"
             >
               <Target className="h-4 w-4" /> Establecer meta de ahorro
             </button>
@@ -127,7 +127,7 @@ export function SavingsGoalCard({ meta, saldoActual, onCambio }: Props) {
           >
             <div className="flex items-center justify-between pb-3 border-b border-[#DCE4DB]">
               <h3 className="text-sm font-bold text-[#1C3028] flex items-center gap-2">
-                <Flag className="h-4 w-4 text-[#795F84]" /> Meta de ahorro
+                <Flag className="h-4 w-4 text-[#286F50]" /> Meta de ahorro
               </h3>
               <button
                 type="button"

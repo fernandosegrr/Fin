@@ -18,7 +18,7 @@ export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
         paddingBottom: "max(0.5rem, env(safe-area-inset-bottom, 0px))",
       }}
     >
-      <div className="max-w-app mx-auto flex items-center justify-around px-2 py-1.5">
+      <div className="max-w-2xl mx-auto flex items-center justify-around px-2 py-1.5">
         {sections.map((tab) => {
           const Icon = tab.icon;
           const esActiva = tabActiva === tab.id;
@@ -50,7 +50,7 @@ export function BottomNavigationBar({ tabActiva, onCambiarTab }: Props) {
                 <Icon className="h-5 w-5" />
               </div>
 
-              <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-full">
+              <span className="text-[11px] mt-0.5 truncate max-w-full">
                 {tab.shortLabel}
               </span>
             </button>

@@ -73,7 +73,7 @@ export function calcularTotalesDetallados(filas: FilaParaTotales[]): TotalesCalc
       // La distribución de consumo describe compras; el reembolso se muestra aparte.
       if (naturaleza === "reembolso") continue;
 
-      if (fila.categoria.grupo === "fijo") egresosFijos += montoCategoria;
+      if (fila.gasto_recurrente_id || fila.categoria.grupo === "fijo") egresosFijos += montoCategoria;
       else if (fila.categoria.grupo === "variable") egresosVariables += montoCategoria;
 
       const acumulado = porCategoria.get(fila.categoria.id);

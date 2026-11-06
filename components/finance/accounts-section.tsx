@@ -20,7 +20,7 @@ export function AccountsSection({ finanzas: f, transferencias, onCambio }: { fin
   const [editando, setEditando] = useState<Transferencia | CuentaConSaldo | null>(null);
   const [borrando, setBorrando] = useState(false);
   const [eliminada, setEliminada] = useState<string | null>(null);
-  const cuentas = f.cuentas.filter(c => !c.archivada);
+  const cuentas = f.cuentas.filter(c => !c.archivada).sort((a, b) => ({ principal: 0, ahorro: 1, efectivo: 2, reserva: 3 }[a.tipo] - { principal: 0, ahorro: 1, efectivo: 2, reserva: 3 }[b.tipo]));
   const hoy = hoyISOEnMexico();
   const bases = useMemo(() => f.cuentas.map(c => ({ ...c, saldo: f.estimacionRendimientos?.cuentas.find(e => e.cuentaId === c.id)?.saldoProyectado ?? c.saldo })), [f.cuentas, f.estimacionRendimientos]);
   const manana = useMemo(() => proyectarRendimientos(bases, 1, hoy), [bases, hoy]);
@@ -35,26 +35,28 @@ export function AccountsSection({ finanzas: f, transferencias, onCambio }: { fin
     finally { setBorrando(false); }
   }
   return <section id="cuentas-rendimientos" className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">CUENTAS Y APARTADOS</p><h3 className="text-xl font-bold mt-1">Cada peso en su lugar</h3></div><button onClick={() => abrir("cuenta")} className="finance-action"><Plus size={15} /> Nueva cuenta</button></div>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{cuentas.map(c => {
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">{cuentas.length} cuentas registradas</h2></div><button onClick={() => abrir("cuenta")} className="finance-action"><Plus size={15} /> Nueva cuenta</button></div>
+    <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">{cuentas.map(c => {
       const dia = manana.find(p => p.cuentaId === c.id); const treinta = mes.find(p => p.cuentaId === c.id);
       const acumulado = f.estimacionRendimientos?.cuentas.find(p => p.cuentaId === c.id);
       return <article key={c.id} className="finance-card p-5">
         <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-[#5E7165]">{c.banco || (c.tipo === "efectivo" ? "Dinero físico" : "Cuenta propia")}</p><Landmark size={17} className="text-[#286F50]" /></div>
         <h4 className="font-bold mt-2">{c.nombre}</h4><p className="text-3xl font-bold tabular-nums mt-3">{formatearMonto(c.saldo)}</p><p className="text-[10px] text-[#7A897D] mb-3">Saldo registrado</p>
         <p className="text-xs text-[#5E7165]">{c.excluida_disponible ? "Separado del disponible para gastar" : "Incluido en tu disponible"}</p>
-        {dia && <div className="mt-4 pt-3 border-t border-[#DCE4DB] space-y-1.5 text-xs">
-          {acumulado && <><p className="flex justify-between text-[#286F50]"><span>Saldo con interés estimado</span><strong>{formatearMonto(acumulado.saldoProyectado)}</strong></p><p className="text-[10px] text-[#7A897D]">Pendiente de confirmar: {formatearMonto(acumulado.neto)} netos al {f.estimacionRendimientos!.hasta}. Se actualiza diariamente.</p></>}
-          <p className="flex justify-between"><span>Tasa anual ponderada</span><strong>{dia.tasaPonderada.toFixed(2)}%</strong></p>
-          <p className="flex justify-between"><span>Ganado neto este mes</span><strong>{formatearMonto(c.rendimientosMes)}</strong></p>
-          <p className="flex justify-between text-[#286F50]"><span>Próximo día · estimado neto</span><strong>+{formatearMonto(dia.neto)}</strong></p>
-          <p className="flex justify-between"><span>30 días · estimado neto</span><strong>+{formatearMonto(treinta?.neto ?? 0)}</strong></p>
-          <p className="text-[10px] leading-relaxed text-[#7A897D]">Proyección desde el saldo estimado, con tasas constantes y antes de comisiones del plan. El último abono real o conciliación reinicia el interés pendiente.</p>
+        {dia && <div className="account-returns">
+          <p><span>Ganado este mes · neto</span><strong>{formatearMonto(c.rendimientosMes)}</strong></p>
+          <p><span>Próximo día · estimado</span><strong className="text-[#286F50]">+{formatearMonto(dia.neto)}</strong></p>
+          <details><summary>Detalle de rendimientos</summary>
+            {acumulado && <><p><span>Saldo con interés estimado</span><strong>{formatearMonto(acumulado.saldoProyectado)}</strong></p><small>Pendiente de confirmar: {formatearMonto(acumulado.neto)} netos al {f.estimacionRendimientos!.hasta}.</small></>}
+            <p><span>Tasa anual ponderada</span><strong>{dia.tasaPonderada.toFixed(2)}%</strong></p>
+            <p><span>30 días · estimado neto</span><strong>+{formatearMonto(treinta?.neto ?? 0)}</strong></p>
+            <small>Estimación con tasas constantes y antes de comisiones del plan. El último abono real o conciliación reinicia el interés pendiente.</small>
+          </details>
         </div>}
         <div className="mt-4 flex flex-wrap gap-2"><button className="finance-action !py-1.5" onClick={() => abrir("cuenta", c)}>Editar</button><button className="finance-action !py-1.5" onClick={() => abrir("ajuste", c)}>Conciliar saldo</button>{c.grupo_rendimiento && <button className="finance-action !py-1.5" onClick={() => abrir("rendimiento", c)}>Registrar interés</button>}</div>
       </article>;
     })}</div>
-    <div className="finance-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-bold flex gap-2 items-center"><ArrowRightLeft size={17} /> Mover dinero entre tus cuentas</h4><p className="text-xs text-[#5E7165] mt-1">Aportar o retirar ahorro conserva tu patrimonio.</p></div><button className="finance-action" onClick={() => abrir("traspaso")}>Registrar traspaso</button></div>
+    <div className="finance-card p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-bold flex gap-2 items-center"><ArrowRightLeft size={17} /> Mover dinero entre tus cuentas</h4><p className="text-xs text-[#5E7165] mt-1">Aportar o retirar ahorro no cambia el dinero total que tienes.</p></div><button className="finance-action" onClick={() => abrir("traspaso")}>Registrar traspaso</button></div>
       {eliminada && <div role="status" className="mt-3 text-xs text-[#286F50]">Traspaso quitado. <button className="underline font-semibold" disabled={borrando} onClick={async () => { setBorrando(true); try { await restaurarTransferencia(eliminada); setEliminada(null); onCambio({ texto: "Traspaso restaurado." }); } catch (e) { onCambio({ texto: e instanceof Error ? e.message : "No se pudo restaurar.", tipo: "error" }); } finally { setBorrando(false); } }}>Deshacer</button></div>}
       {!!transferencias.length && <div className="mt-4 divide-y divide-[#DCE4DB]">{transferencias.map(t => <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs" key={t.id}><div><p className="font-semibold">{nombres.get(t.cuenta_origen_id || "") || t.origen} → {nombres.get(t.cuenta_destino_id || "") || t.destino}</p><p className="text-[#5E7165] mt-1">{t.fecha}{t.descripcion ? ` · ${t.descripcion}` : ""}</p></div><div className="flex items-center gap-3"><strong>{formatearMonto(t.monto)}</strong><button className="underline" onClick={() => abrir("traspaso", t)}>Editar</button><button disabled={borrando} className="text-[#AA524A] underline" onClick={() => borrar(t)}>Quitar</button></div></div>)}</div>}
     </div>

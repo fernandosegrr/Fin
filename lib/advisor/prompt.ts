@@ -19,7 +19,8 @@ function formatearLineaTransaccion(t: TransaccionConCategoria): string {
   const detalle = t.descripcion ? `"${sanitizarDato(t.descripcion, 120)}"` : "(sin descripción)";
   const cliente = t.cliente?.nombre ? ` · cliente: ${sanitizarDato(t.cliente.nombre, 50)}` : "";
   const recurrente = t.gasto_recurrente_id ? " · [suscripción]" : "";
-  return `- [${t.fecha}] ${tipo} ${formatearMonto(aNumero(t.monto))} | ${nombreCat}${grupo} | ${metodo} | Detalle: ${detalle}${cliente}${recurrente} | id:${t.id}`;
+  const etiquetas = t.etiquetas?.length ? ` | Etiquetas: ${t.etiquetas.map(e => sanitizarDato(e, 50)).join(", ")}` : "";
+  return `- [${t.fecha}] ${tipo} ${formatearMonto(aNumero(t.monto))} | ${nombreCat}${grupo} | ${metodo} | Detalle: ${detalle}${cliente}${recurrente}${etiquetas} | id:${t.id}`;
 }
 
 export function construirSystemPrompt(datos: {
@@ -105,6 +106,7 @@ export function construirSystemPrompt(datos: {
     deudasPendientes: actual.finanzas.deudasPendientes, retencionesRegistradas: actual.finanzas.retenciones, rendimientosSinDesglose: actual.finanzas.rendimientosSinDesglose, estimacionRendimientosPendientes: actual.finanzas.estimacionRendimientos, ajustes: actual.finanzas.ajustes, entradasPorIdentificar: actual.finanzas.entradasPorIdentificar, salidasPorIdentificar: actual.finanzas.salidasPorIdentificar,
     aportacionesAhorro: actual.finanzas.aportacionesAhorro, retirosAhorro: actual.finanzas.retirosAhorro, pendientesDeRevision: actual.finanzas.pendientes,
     historicoIngresos: actual.finanzas.historicoIngresos,
+    gastosDestino: actual.finanzas.gastosDestino && Object.fromEntries(Object.entries(actual.finanzas.gastosDestino).map(([periodo, grupos]) => [periodo, Object.fromEntries(Object.entries(grupos).map(([grupo, datos]) => [grupo, { total: datos.total, cantidad: datos.cantidad }]))])),
     cuentas: actual.finanzas.cuentas.map(c => ({ id: c.id, nombre: c.nombre, saldo: c.saldo, ahorro: c.excluida_disponible, generaRendimientosDesde: c.rendimiento_desde, plan: c.plan, grupoRendimiento: c.grupo_rendimiento, gananciasNetasMes: c.rendimientosMes })),
     proyeccion30DiasConSaldoConstante: proyectarRendimientos(actual.finanzas.cuentas, 30, hoyISOEnMexico()),
   }) : "(modelo básico de cuentas)";
@@ -147,6 +149,7 @@ Reglas de comportamiento y formato:
   - El usuario puede tener dinero principal y ahorro en distintos apartados remunerados. Los límites de Revolut son compartidos y las proyecciones nunca se registran como intereses reales.
   - Si hay rendimientosSinDesglose, sólo se conoce su neto. No presentes el bruto o las retenciones registradas como un total completo ni supongas que no hubo impuestos.
   - Respeta los nombres discretos elegidos por el usuario; no los sustituyas por términos más explícitos ni deduzcas su significado privado.
+  - Para comparar gastos en pareja y personales, usa gastosDestino del libro: mes para el periodo abierto e historico hasta su cierre. Son importes pagados por el usuario; no los dividas entre dos ni atribuyas todos los gastos sin identificar a su persona. Familia y otros y Por confirmar se muestran separados. La etiqueta En pareja puede coexistir con cualquier categoría, como Auto. Al registrar un gasto, conserva el destinatario explícito con las etiquetas Personal, En pareja, Familia y otros o Por confirmar; pregunta si es necesario y no deduzcas acompañantes por el comercio.
   - Las cifras de compras y su top se calculan sobre TODO el mes. El listado de detalle puede ser una muestra: usa consultar_movimientos para obtener todas las coincidencias y sus totales completos, y offset para más detalle.
   - Usa consultar_resumen_financiero para comparar periodos completos, verificar saldos después de una acción o responder ingresos históricos. Los totales por naturaleza no se suman todos como si fueran ingresos.
   - Registrar movimientos, traspasos, intereses, metas, presupuestos o categorías requiere que el usuario lo pida; preguntar cuánto produciría algo es una consulta, no una orden de acreditarlo.

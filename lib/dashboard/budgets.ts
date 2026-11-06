@@ -6,6 +6,7 @@ import { aNumero, redondearMonto } from "@/lib/format";
 import { traerTodasLasFilas } from "@/lib/supabase/paginar";
 import { exigirUsuario } from "@/lib/dashboard/shared";
 import type { Categoria, Presupuesto, PresupuestoConGasto, Transaccion } from "@/lib/types";
+import { copiarLimitesCompatibles, esIndicePresupuestoAusente, guardarLimitesCompatibles } from "./budget-compat";
 
 // PRESUPUESTOS
 // ─────────────────────────────────────────────
@@ -68,7 +69,10 @@ async function cargarPresupuestos(
   let presupuestos = (resPresupuestos.data ?? []) as Presupuesto[];
   if (!presupuestos.length && anio === hoy.anio && mes === hoy.mes) {
     const copia = await supabase.rpc("copiar_presupuestos_vigentes", { p_mes: mesActualISO });
-    if (copia.error) throw errorDeBaseDatos(copia.error);
+    if (copia.error) {
+      if (esIndicePresupuestoAusente(copia.error)) await copiarLimitesCompatibles(supabase, mesActualISO);
+      else throw errorDeBaseDatos(copia.error);
+    }
     const lectura = await supabase.from("presupuestos").select("*").eq("mes", mesActualISO);
     if (lectura.error) throw errorDeBaseDatos(lectura.error);
     presupuestos = (lectura.data ?? []) as Presupuesto[];
@@ -109,7 +113,10 @@ export async function guardarPresupuestosMultiples(mesISO: string, presupuestos:
   if (presupuestos.some(p => !p.categoria_id || !Number.isFinite(Number(p.monto_limite)))) throw new Error("Los límites no son válidos.");
   const supabase = await createClient();
   const { error } = await supabase.rpc("guardar_presupuestos_financieros", { p_mes: mesISO, p_limites: presupuestos.map(p => ({ categoria_id: p.categoria_id, monto_limite: redondearMonto(Number(p.monto_limite)) })) });
-  if (error) throw errorDeBaseDatos(error);
+  if (error) {
+    if (esIndicePresupuestoAusente(error)) await guardarLimitesCompatibles(supabase, mesISO, presupuestos.map(p => ({ categoria_id: p.categoria_id, monto_limite: redondearMonto(Number(p.monto_limite)) })));
+    else throw errorDeBaseDatos(error);
+  }
   revalidatePath("/dashboard");
 }
 

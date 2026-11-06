@@ -19,7 +19,7 @@ export function RecurringExpenses(props: RecurringExpensesProps) {
 
   return (
     <section>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
+      <div className="compact-metrics grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         <div className="rounded-2xl border border-[#DCE4DB] bg-white p-4 sm:p-5 backdrop-blur-md shadow-lg shadow-black/5">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wider text-[#5E7165]">Total Comprometido</p>

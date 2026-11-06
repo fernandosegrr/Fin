@@ -42,7 +42,7 @@ export function TransactionsSection({
 
   return (
     <>
-      <section className="mt-4 px-0 sm:px-4 pb-20">
+      <section className="mt-4 pb-8">
         <SpotlightCard
           spotlightColor="rgba(16, 244, 177, 0.12)"
           className="bg-white border border-[#DCE4DB] p-5 sm:p-6 rounded-3xl shadow-xl shadow-black/5"
@@ -51,7 +51,7 @@ export function TransactionsSection({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
             <div>
               <h2 className="text-base sm:text-lg font-black text-[#1C3028] tracking-tight">
-                Movimientos del Mes
+                Movimientos
               </h2>
               <p className="text-xs text-[#5E7165]">
                 Mostrando {Math.min(limiteVisible, transaccionesFiltradas.length)} de {transaccionesFiltradas.length} resultados · {transacciones.length} movimientos en el mes
@@ -97,6 +97,7 @@ export function TransactionsSection({
               <div className="flex rounded-xl bg-[#F7F9F5] p-1 border border-[#DCE4DB] text-xs">
                 <button
                   type="button"
+                  aria-pressed={filtroTipo === "todos"}
                   onClick={() => setFiltroTipo("todos")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "todos"
@@ -108,6 +109,7 @@ export function TransactionsSection({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={filtroTipo === "egreso"}
                   onClick={() => setFiltroTipo("egreso")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "egreso"
@@ -119,6 +121,7 @@ export function TransactionsSection({
                 </button>
                 <button
                   type="button"
+                  aria-pressed={filtroTipo === "ingreso"}
                   onClick={() => setFiltroTipo("ingreso")}
                   className={`px-3 py-1 rounded-lg font-bold transition-all ${
                     filtroTipo === "ingreso"
@@ -204,13 +207,13 @@ export function TransactionsSection({
                     onClick={() => {
                       abrirEdicion(t);
                     }}
-                    className={`group flex w-full items-center justify-between p-3.5 text-left rounded-2xl bg-[#F7F9F5] border border-[#DCE4DB] hover:border-[#CBD6CA] hover:bg-white transition-all ${
+                    className={`group flex w-full items-center justify-between p-3 sm:p-3.5 gap-3 text-left rounded-xl bg-white border border-[#E6EBE3] hover:border-[#CBD6CA] hover:bg-white transition-all ${
                       t.pendiente ? "opacity-50 cursor-wait" : "cursor-pointer"
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                        className={`hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
                           esIngreso
                             ? "bg-emerald-500/10 border-emerald-500/25 text-[#286F50]"
                             : "bg-rose-500/10 border-rose-500/25 text-[#AA524A]"
@@ -225,14 +228,14 @@ export function TransactionsSection({
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="truncate text-xs sm:text-sm font-bold text-[#263D33]">
+                          <p className="truncate text-sm font-semibold text-[#263D33]">
                             {t.categoria?.nombre ?? "Sin categoría"}
                             {t.cliente?.nombre ? (
                               <span className="ml-1 font-medium text-[#5E7165]">· {t.cliente.nombre}</span>
                             ) : null}
                           </p>
                           <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
+                            className={`hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                               esEfectivo
                                 ? "bg-amber-500/10 text-[#A66E31] border-amber-500/20"
                                 : "bg-cyan-500/10 text-[#317D7D] border-cyan-500/20"
@@ -241,7 +244,7 @@ export function TransactionsSection({
                             {esEfectivo ? "Efectivo" : "Tarjeta"}
                           </span>
                         </div>
-                        <p className="truncate text-[11px] text-[#5E7165] mt-0.5">
+                        <p className="truncate text-xs text-[#5E7165] mt-1">
                           {formatearFechaCorta(t.fecha)}
                           {t.descripcion ? ` · ${t.descripcion}` : ""}
                           {` · ${NOMBRES_NATURALEZA[naturaleza]}`}
@@ -251,7 +254,7 @@ export function TransactionsSection({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0 pl-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <span
                         className={`text-sm sm:text-base font-black tabular-nums ${
                           esIngreso ? "text-[#286F50]" : "text-[#1C3028]"
@@ -269,20 +272,6 @@ export function TransactionsSection({
           {limiteVisible < transaccionesFiltradas.length && <button type="button" className="finance-action w-full mt-4" onClick={() => setLimiteVisible(n => n + 50)}>Ver 50 movimientos más</button>}
         </SpotlightCard>
       </section>
-
-      {/* Acceso rápido en móvil */}
-      <button
-        type="button"
-        onClick={abrirNuevo}
-        aria-label="Agregar movimiento"
-        className="lg:hidden fixed z-40 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#1D4C37] bg-[#245C42] text-white shadow-lg shadow-[#245C42]/20 transition-colors hover:bg-[#1D4C37]"
-        style={{
-          bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))",
-          right: "max(1.25rem, calc((100vw - 640px) / 2 + 1.25rem))",
-        }}
-      >
-        <Plus className="h-6 w-6" />
-      </button>
 
       {/* Modales */}
       <TransactionCaptureModal

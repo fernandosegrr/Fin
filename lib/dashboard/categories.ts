@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { exigirUsuario } from "@/lib/dashboard/shared";
 import type { Categoria, GrupoCategoria, TipoCategoria } from "@/lib/types";
 import { NATURALEZAS, type NaturalezaMovimiento } from "@/lib/finance/types";
+import { esIndicePresupuestoAusente, fusionarCategoriasCompatibles } from "./budget-compat";
 
 // CATEGORÍAS
 // ─────────────────────────────────────────────
@@ -102,7 +103,10 @@ export async function actualizarCategoria(id: string, input: { nombre: string; f
 export async function fusionarCategorias(origen: string, destino: string) {
   if (origen === destino) throw new Error("Selecciona otra categoría de destino.");
   const db = await createClient(); const r = await db.rpc("fusionar_categorias_financieras", { p_origen: origen, p_destino: destino });
-  if (r.error) throw errorDeBaseDatos(r.error);
+  if (r.error) {
+    if (esIndicePresupuestoAusente(r.error)) await fusionarCategoriasCompatibles(db, origen, destino);
+    else throw errorDeBaseDatos(r.error);
+  }
   revalidatePath("/dashboard");
 }
 
